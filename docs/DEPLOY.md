@@ -17,7 +17,7 @@ gh run watch          # or the repository's Actions tab; about a minute
 
 ## Set it up from scratch on another machine
 
-Needs Node 22.12 or newer, git, and the GitHub CLI (`gh`).
+Needs Node 22.18 or newer (it runs the TypeScript sources directly in tests), git, and the GitHub CLI (`gh`).
 
 ```bash
 gh auth login                                   # once per machine

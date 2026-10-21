@@ -28,17 +28,32 @@ Not checked yet
 - The demo against a real board (no board was attached while building it).
   The spectrogram path was checked in the browser with synthetic frames.
 
+## 2026-10-21: STFT spectrogram method (branch `stft-spectrogram`)
+
+Done
+- Ported SensDSv2's other spectrogram method from `core/processing.py`
+  (`spectrogram_from_frames` with MTI, `_stft_hanning`, `spectrogram_to_db`)
+  into `src/dsp/`, one function per TypeScript file: `slowTimeSignal`
+  (range FFT, clutter removal, MTI, upper range bins summed), `stft`,
+  `stftSpectrogram`, `spectrogramToDb`, `mtiHighpass`, plus scipy's `butter`
+  and `lfilter` and numpy's `hanning`. All on `radar.dsp`.
+- `reference/python/make_stft_fixtures.py` runs SensDSv2's code, read only,
+  on `tests/fixtures/radar/python_frames.npy` and writes
+  `tests/fixtures/stft/`. `tests/stft.test.js` (15 tests): the MTI
+  coefficients, `lfilter` and the dB image match exactly; the slow-time signal
+  and spectrogram (after FFTs) to ~5e-14 of the peak; `hanning` and other
+  `butter` orders to 1e-15 (libm rounding). 68/68 pass.
+- New TypeScript files import each other with `.ts`; Node strips the types
+  in tests, so `engines` is now Node >= 22.18.
+
 ## Next
 
 1. Try the demo with the board; compare a capture with SensDSv2 (sensds-web's
    `scripts/compare_frames.mjs` approach).
-2. Port the STFT method from SensDSv2 `core/processing.py` (Butterworth MTI
-   high-pass + Hanning STFT, nfft 1024, window 256, overlap 200) into
-   `src/dsp/`, with Python fixtures.
-3. `configure()` for other chirp settings: port the SDK's register
+2. `configure()` for other chirp settings: port the SDK's register
    calculation (lib_avian), so the register list is no longer fixed.
-4. `src/data/`: recording to .npy from the live stream (sensds-web Visualize
+3. `src/data/`: recording to .npy from the live stream (sensds-web Visualize
    tab's `saveFrames`).
-5. `src/simulate/`: synthetic frames (tests/synthetic.js is a start).
-6. Type declarations (`.d.ts`) for npm, and an npm publish once licensing for
+4. `src/simulate/`: synthetic frames (tests/synthetic.js is a start).
+5. Type declarations (`.d.ts`) for npm, and an npm publish once licensing for
    the Strata-derived files is settled for package distribution.

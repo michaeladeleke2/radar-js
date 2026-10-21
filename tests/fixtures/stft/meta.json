@@ -1,0 +1,180 @@
+{
+ "frames_shape": [
+  20,
+  3,
+  128,
+  256
+ ],
+ "constants": {
+  "STFT_NFFT": 1024,
+  "STFT_WINDOW": 256,
+  "STFT_NOVERLAP": 200,
+  "DB_MIN": -20,
+  "DB_MAX": 0
+ },
+ "butters": [
+  [
+   4,
+   0.2,
+   "low"
+  ],
+  [
+   3,
+   0.3,
+   "high"
+  ],
+  [
+   2,
+   0.05,
+   "high"
+  ],
+  [
+   5,
+   0.6,
+   "low"
+  ]
+ ],
+ "versions": {
+  "numpy": "2.4.3",
+  "scipy": "1.17.1"
+ },
+ "arrays": {
+  "hanning_256": {
+   "shape": [
+    256
+   ],
+   "offset": 0
+  },
+  "mti_b": {
+   "shape": [
+    2
+   ],
+   "offset": 2048
+  },
+  "mti_a": {
+   "shape": [
+    2
+   ],
+   "offset": 2064
+  },
+  "butter_4_0.2_low_b": {
+   "shape": [
+    5
+   ],
+   "offset": 2080
+  },
+  "butter_4_0.2_low_a": {
+   "shape": [
+    5
+   ],
+   "offset": 2120
+  },
+  "butter_3_0.3_high_b": {
+   "shape": [
+    4
+   ],
+   "offset": 2160
+  },
+  "butter_3_0.3_high_a": {
+   "shape": [
+    4
+   ],
+   "offset": 2192
+  },
+  "butter_2_0.05_high_b": {
+   "shape": [
+    3
+   ],
+   "offset": 2224
+  },
+  "butter_2_0.05_high_a": {
+   "shape": [
+    3
+   ],
+   "offset": 2248
+  },
+  "butter_5_0.6_low_b": {
+   "shape": [
+    6
+   ],
+   "offset": 2272
+  },
+  "butter_5_0.6_low_a": {
+   "shape": [
+    6
+   ],
+   "offset": 2320
+  },
+  "slow_time_mti_re": {
+   "shape": [
+    2560
+   ],
+   "offset": 2368
+  },
+  "slow_time_mti_im": {
+   "shape": [
+    2560
+   ],
+   "offset": 22848
+  },
+  "spect_mti": {
+   "shape": [
+    41,
+    1024
+   ],
+   "offset": 43328
+  },
+  "slow_time_raw_re": {
+   "shape": [
+    2560
+   ],
+   "offset": 379200
+  },
+  "slow_time_raw_im": {
+   "shape": [
+    2560
+   ],
+   "offset": 399680
+  },
+  "spect_raw": {
+   "shape": [
+    41,
+    1024
+   ],
+   "offset": 420160
+  },
+  "lfilter_raw_re": {
+   "shape": [
+    2560
+   ],
+   "offset": 756032
+  },
+  "lfilter_raw_im": {
+   "shape": [
+    2560
+   ],
+   "offset": 776512
+  },
+  "db_mti": {
+   "shape": [
+    41,
+    1024
+   ],
+   "offset": 796992
+  },
+  "spect_short": {
+   "shape": [
+    1,
+    1024
+   ],
+   "offset": 1132864
+  },
+  "db_short": {
+   "shape": [
+    1,
+    1024
+   ],
+   "offset": 1141056
+  }
+ }
+}

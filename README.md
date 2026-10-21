@@ -38,7 +38,7 @@ from `localhost`.
 | `radar.configure(settings)` | Checks settings (Infineon SDK names). Only the SensDSv2 configuration is supported for now |
 | `radar.start()` / `radar.stop()` | Start or stop streaming |
 | `radar.onFrame(cb)` | Raw frames, the same values as the SDK's `get_next_frame()` |
-| `radar.dsp.*` | Range-Doppler map, live and recorded spectrogram, range map (raw / MTI), FFT, windows |
+| `radar.dsp.*` | Range-Doppler map, live and recorded spectrogram, STFT spectrogram (`stftSpectrogram`, `spectrogramToDb`), range map (raw / MTI), FFT, windows, `butter`, `lfilter` |
 | `radar.viz.*` | Canvas plots in the SensDSv2 look (jet colormap) |
 | `radar.data.*` | Read and write `.npy` recordings |
 

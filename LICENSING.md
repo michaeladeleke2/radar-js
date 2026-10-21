@@ -11,7 +11,9 @@ under different licences:
 | Radar SDK device layer (`sdk/c/ifxFmcw`) | BSD 3-Clause (per file headers) | `src/device/unpack.js`, `src/config/config.js` (slice size) |
 | SensDSv2 (`core/doppler_spectrogram_live.py`) | The project owner's own code | `src/dsp/doppler_live.js`, `src/dsp/recorded.js`, `src/viz/live_plot.js` |
 | Range map scripts (`range_map_v1.py`, `range_map_live.py`) | The project owner's own code | `src/dsp/range_map.js`, `src/dsp/range_worker.js`, `src/viz/range_plot.js` |
-| scipy (window functions) | BSD 3-Clause | `src/dsp/windows.js` |
+| SensDSv2 (`core/processing.py`, STFT method) | The project owner's own code | `src/dsp/slow_time.ts`, `src/dsp/stft.ts`, `src/dsp/stft_spectrogram.ts`, `src/dsp/spectrogram_to_db.ts`, `src/dsp/mti_highpass.ts` |
+| scipy (window functions, `butter`, `lfilter`) | BSD 3-Clause | `src/dsp/windows.js`, `src/dsp/butter.ts`, `src/dsp/lfilter.ts` |
+| numpy (`hanning`) | BSD 3-Clause | `src/dsp/hanning.ts` |
 | matplotlib (jet colormap, tick placement, image resampling) | Matplotlib License (BSD-style) | `src/viz/jet.js`, `src/viz/ticks.js`, `src/viz/image.js` |
 
 Every Strata-derived file starts with a `STRATA DERIVED` comment:
