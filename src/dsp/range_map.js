@@ -48,7 +48,7 @@ function toDb(linear, power) {
 
 // _range_spectrum: frame (nChirp x nSample) -> { re, im } (nChirp x nRangeBins),
 // i.e. the transpose of the script's (n_range_bins, n_chirp) array
-function rangeSpectrum(frame, nChirp, nSample, rangeWindow, rangeFftSize) {
+export function rangeSpectrum(frame, nChirp, nSample, rangeWindow, rangeFftSize) {
   const nBins = rangeFftSize / 2;
   const re = new Float64Array(nChirp * nBins), im = new Float64Array(nChirp * nBins);
   const bufRe = new Float64Array(rangeFftSize), bufIm = new Float64Array(rangeFftSize);

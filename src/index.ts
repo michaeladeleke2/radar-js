@@ -5,8 +5,8 @@
 //   radar.onFrame(cube => ...);       // Float32Array (3 x 128 x 256)
 //   await radar.start();
 //
-// The code under src/ is copied from sensds-web (see CLAUDE.md); this file
-// only names it.
+// The device, config, viz and DSP kernels are copied from sensds-web (see
+// CLAUDE.md); radar.dsp wraps the kernels as pure functions (src/dsp/api).
 
 import {
   connectRadar, startRadar, stopRadar, disconnectRadar, subscribeFrames, onRadarState,
@@ -18,21 +18,8 @@ import { SENSDS_CONFIG, deriveAcquisition, calculateSliceSize } from './config/c
 import { configure } from './config/configure.js';
 import { parseRegisterFile } from './config/registers.js';
 import { REGISTERS, EXPORT_INFO } from './config/registers_tr13c.js';
-import { fft, pairwiseSum } from './dsp/fft.js';
-import { blackmanharris, chebwin } from './dsp/windows.js';
-import { hanning } from './dsp/hanning.ts';
-import { butter } from './dsp/butter.ts';
-import { lfilter } from './dsp/lfilter.ts';
-import { mtiHighpass, MTI_FILTER } from './dsp/mti_highpass.ts';
-import { slowTimeSignal } from './dsp/slow_time.ts';
-import { stft, STFT_DEFAULTS } from './dsp/stft.ts';
-import { stftSpectrogram } from './dsp/stft_spectrogram.ts';
-import { spectrogramToDb, STFT_DB_RANGE } from './dsp/spectrogram_to_db.ts';
-import { RdmComputer, LiveDopplerProcessor, rangeDopplerWindows, selectRangeBinRaw } from './dsp/doppler_live.js';
-import { computeRecorded, smoothRangeBins } from './dsp/recorded.js';
-import { computeRangeMap, frameProfile, LiveRangeProcessor, rangeAxisM } from './dsp/range_map.js';
-import { LiveProcessorClient } from './dsp/live_client.js';
-import { RangeMapClient } from './dsp/range_client.js';
+import { dsp } from './dsp/api/index.ts';
+import { stream } from './stream/index.ts';
 import { LiveSpectrogramPlot } from './viz/live_plot.js';
 import { RangeMapPlot } from './viz/range_plot.js';
 import { JET_LUT, JET_LUT_BYTES } from './viz/jet.js';
@@ -95,57 +82,15 @@ export const radar = {
   /** Radar settings and derived acquisition sizes. */
   config: { SENSDS_CONFIG, deriveAcquisition, calculateSliceSize, parseRegisterFile, REGISTERS, EXPORT_INFO },
 
-  /** Signal processing, ported from SensDSv2 (matches its Python output). */
-  dsp: {
-    /** Spectrogram of a recording: frames (antenna 0, nChirp x nSample each) -> { spectrogram, rangeBins, dopplerBins }. */
-    spectrogram: computeRecorded,
-    /** Live spectrogram, one frame at a time (rolling history). */
-    LiveSpectrogram: LiveDopplerProcessor,
-    /** The live spectrogram in a Web Worker. */
-    LiveSpectrogramWorker: LiveProcessorClient,
-    /** Range FFT + Doppler FFT of one frame, in dB. */
-    RangeDopplerMap: RdmComputer,
-    rangeDopplerWindows,
-    selectRangeBin: selectRangeBinRaw,
-    smoothRangeBins,
-    /** Range map of a recording, mode 'raw' or 'mti'. */
-    rangeMap: computeRangeMap,
-    /** Range profile of one frame, mode 'raw' or 'mti' (moving target indication). */
-    rangeProfile: frameProfile,
-    LiveRangeMap: LiveRangeProcessor,
-    LiveRangeMapWorker: RangeMapClient,
-    rangeAxis: rangeAxisM,
-    /**
-     * SensDSv2's other spectrogram method ("STFT"): frames (antenna 0,
-     * nChirp x nSample each) -> { spectrogram (nCols x 1024, magnitude), nCols, nfft }.
-     * Range FFT, clutter removal, MTI high-pass, upper range bins summed, Hanning STFT.
-     */
-    stftSpectrogram,
-    /** Magnitude spectrogram -> dB image as SensDSv2 saves it: peak normalised, clipped to [-20, 0]. */
-    spectrogramToDb,
-    /** The slow-time signal stftSpectrogram transforms: one complex value per chirp. */
-    slowTimeSignal,
-    /** Hanning-window STFT (nfft 1024, window 256, noverlap 200 by default), not shifted. */
-    stft,
-    /** SensDSv2's MTI high-pass along slow time: lfilter with butter(1, 0.01, 'high'). */
-    mtiHighpass,
-    /** { b, a } of the MTI high-pass. */
-    MTI_FILTER,
-    /** STFT parameters { nfft, window, noverlap }. */
-    STFT_DEFAULTS,
-    /** dB range of the STFT spectrogram image { min, max }. */
-    STFT_DB_RANGE,
-    /** scipy.signal.butter for low- and high-pass filters: { b, a }. */
-    butter,
-    /** scipy.signal.lfilter (zero initial state). */
-    lfilter,
-    /** numpy.hanning. */
-    hanning,
-    fft,
-    pairwiseSum,
-    blackmanharris,
-    chebwin,
-  },
+  /**
+   * Signal processing as pure functions: arrays in, plain arrays out, settings
+   * passed in, no device or page needed. Matches SensDSv2's Python output
+   * (test/golden.test.ts).
+   */
+  dsp,
+
+  /** Stateful live helpers (rolling spectrogram and range map, Web Worker versions). */
+  stream,
 
   /** Canvas plots drawn the way SensDSv2's matplotlib figures look. */
   viz: { LiveSpectrogramPlot, RangeMapPlot, JET_LUT, JET_LUT_BYTES },

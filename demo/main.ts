@@ -22,7 +22,7 @@ const canvas = $('plot') as HTMLCanvasElement;
 
 const plot = new radar.viz.LiveSpectrogramPlot(canvas, { historyLength: HISTORY_FRAMES, maxSpeed: MAX_SPEED_M_S, jetVmin: JET_VMIN });
 let pending: { history: Float64Array; count: number; dopplerBins: number } | null = null;
-const proc = new radar.dsp.LiveSpectrogramWorker(({ history, dopplerBins, count }: { history: Float64Array; dopplerBins: number; count: number }) => {
+const proc = new radar.stream.LiveSpectrogramWorker(({ history, dopplerBins, count }: { history: Float64Array; dopplerBins: number; count: number }) => {
   pending = { history, dopplerBins, count };
 });
 plot.drawEmpty();
