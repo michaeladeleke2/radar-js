@@ -23,7 +23,7 @@ import { stream } from './stream/index.ts';
 import { LiveSpectrogramPlot } from './viz/live_plot.js';
 import { RangeMapPlot } from './viz/range_plot.js';
 import { JET_LUT, JET_LUT_BYTES } from './viz/jet.js';
-import { parseNpy, framesFromNpy, writeNpy, writeNpyFloat32 } from './data/npy.js';
+import { data } from './data/index.ts';
 
 /** Frame callback: one radar frame, Float32Array laid out [rx][chirp][sample] (3 x 128 x 256). */
 export type FrameCallback = (cube: Float32Array) => void;
@@ -95,8 +95,8 @@ export const radar = {
   /** Canvas plots drawn the way SensDSv2's matplotlib figures look. */
   viz: { LiveSpectrogramPlot, RangeMapPlot, JET_LUT, JET_LUT_BYTES },
 
-  /** Recording and export (.npy, the format SensDSv2 saves). */
-  data: { parseNpy, framesFromNpy, writeNpy, writeNpyFloat32 },
+  /** Load and save recordings and results: .npy, CSV (one row per time step), JSON. */
+  data,
 
   /** Lower level: the device class and frame decoding. */
   device: { RadarDevice, INFINEON_VID, unpackPacked12, rawToCube, frameBytesToCube, FrameAcquisitionFailed, FifoOverflow, FrameSizeNotSupported },
