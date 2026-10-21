@@ -47,15 +47,91 @@ Done
 - New TypeScript files import each other with `.ts`; Node strips the types
   in tests, so `engines` is now Node >= 22.18.
 
+## 2026-10-21: library phase (offline first, golden data, data, simulate)
+
+Done
+- Tests moved to `test/` and Vitest (`npm test`).
+- Golden data: `tools/make_golden.py` imports SensDSv2's
+  `doppler_spectrogram_live.py`, `processing.py` and `range_map_v1.py` (read
+  only) and saves every stage for 10 real SDK frames and 10 synthetic frames to
+  `test/golden/` (SensDSv2 commit 85f0517, numpy 2.4.3, scipy 1.17.1). Where a
+  stage sits inside a SensDSv2 function, the script repeats those lines and
+  checks they chain back to the function's output exactly.
+- `radar.dsp` is now pure functions (`src/dsp/api/`): arrays in, plain nested
+  arrays out in SensDSv2's layouts, settings passed in. The stateful live
+  processors moved to `radar.stream`.
+- `radar.data`: .npy (byte-identical to numpy.save), CSV (one row per time
+  step: `spectrogramTable`, `trackTable`), JSON recordings; File/Blob based.
+- `radar.simulate.frames(config, { targets })`: FMCW frames in the device's
+  layout and scale.
+- Demo: Live, File (offline playback, track CSV) and Simulate modes, and
+  Record (.npy, up to 60 s). Checked in the browser with File and Simulate;
+  Live mode's code is unchanged from the version tested on the board.
+- 134 tests pass.
+
+Fixed along the way
+- The golden script's own synthetic input used the centre frequency for the
+  carrier phase, so its Doppler read 4.5% high (-0.53 m/s for -0.50). Fixed
+  (start frequency) and regenerated; only `test/golden/synthetic/` changed.
+  No SensDSv2 function or real-data golden file was affected.
+
+Verified against golden data (SensDSv2's own output; tolerances in
+`test/golden.test.ts`; worst measured error over both inputs)
+
+| radar.js | SensDSv2 | Worst error |
+|---|---|---|
+| `dsp.blackmanharris`, `dsp.chebwin` | `_range_doppler_windows` | 1e-16 |
+| `dsp.rangeFft` | range-FFT lines of `compute_rdm_db` | 6e-16 of peak |
+| `dsp.rangeDopplerMap` | `compute_rdm_db` | 2e-10 dB |
+| `dsp.selectRangeBin`, `dsp.smoothRangeBins` | `select_range_bin_raw`, `smooth_range_bins` | exact |
+| `dsp.dopplerSpectrogram` | `compute_recorded` | 6e-10 dB, bins exact |
+| `stream.LiveSpectrogram` | `LiveDopplerProcessor` | 3e-11 dB, bins exact |
+| `dsp.butter`, `dsp.mtiHighpass` | `_MTI_B`, `_MTI_A`, `lfilter` | exact |
+| `dsp.slowTimeSignal` | `spectrogram_from_frames` steps 1-7 | 3e-14 of peak |
+| `dsp.stft` | `_stft_hanning` | 7e-16 of peak |
+| `dsp.stftSpectrogram` | `spectrogram_from_frames` | 2e-13 of peak |
+| `dsp.spectrogramToDb` | `spectrogram_to_db` | exact (float32) |
+| `dsp.rangeAxis` | `range_axis_m` | exact |
+| `dsp.rangeProfile`, `dsp.rangeMap` (raw, mti) | `frame_profile`, `compute_range_map` | 1e-12 dB |
+
+Verified another way (no SensDSv2 function to compare with)
+- `dsp.velocityAxis`: zero at the centre bin, +/-4.1124 m/s; SensDSv2's
+  REF_MAX_SPEED_M_S (4.112380411522634) agrees to 0.25 ppm (it implies a
+  60.749985 GHz centre, presumably the SDK's own figure). Puts simulated and
+  golden synthetic targets at their speed within one bin.
+- `simulate.frames`: targets peak at their range bin (+/-1) and Doppler bin
+  (+/-1); MTI removes still targets; matches the golden script's Python
+  generator to within its noise.
+- `data`: .npy bytes equal numpy.save's; CSV and JSON round trips exact;
+  `trackTable` follows the synthetic target.
+
+Not verified
+- **Velocity sign on the real board.** radar.js (and the simulation) use
+  negative = toward the radar, which is what a real-valued IF gives. The
+  spectrogram plot copied from SensDSv2 (`LiveSpectrogramPlot`, matplotlib
+  `origin="upper"`) draws negative Doppler bins at the top, labelled positive:
+  in the demo a simulated target moving away shows below the centre. sensds-web's
+  readout says "toward radar below the center", which contradicts its own
+  plot. Needs one test with the board: move a hand toward the radar and note
+  which way the trace goes.
+- The .npy layout against a real Radar Fusion GUI file (none on this
+  machine); it matches what SensDSv2 reads.
+- Record and Live mode together on the board (Record was checked with the
+  simulated stream).
+- The intermediate 2-D STFT stages (range FFT of length 2N, clutter removal)
+  have no public function of their own; they are covered through
+  `mtiHighpass` and `slowTimeSignal`.
+
 ## Next
 
-1. Compare a live capture with SensDSv2 frame by frame (sensds-web's
-   `scripts/compare_frames.mjs` approach), and show the STFT spectrogram
-   in the demo next to the live one.
-2. `configure()` for other chirp settings: port the SDK's register
+1. Velocity sign: one test with the board (above), then make the plot labels
+   and `velocityAxis` agree.
+2. Compare a live capture with SensDSv2 frame by frame, and show the STFT
+   spectrogram in the demo next to the Doppler one.
+3. `configure()` for other chirp settings: port the SDK's register
    calculation (lib_avian), so the register list is no longer fixed.
-3. `src/data/`: recording to .npy from the live stream (sensds-web Visualize
-   tab's `saveFrames`).
-4. `src/simulate/`: synthetic frames (test/synthetic.js is a start).
+4. Golden data for more inputs (a recorded gesture from the board, once
+   recorded with the demo's Record button).
 5. Type declarations (`.d.ts`) for npm, and an npm publish once licensing for
    the Strata-derived files is settled for package distribution.
+6. `src/ml/`: still a placeholder.
