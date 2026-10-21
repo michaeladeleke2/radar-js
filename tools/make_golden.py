@@ -106,7 +106,8 @@ def synthetic_frames(n_frames=N_FRAMES, seed=1):
 
     Real-valued IF per receive antenna, beat frequency 2 R S / c with chirp
     slope S = bandwidth / (num_samples / sample_rate) (the slope range_axis_m
-    uses), carrier phase 4 pi f_c R / c, R advancing with the target's speed
+    uses), carrier phase 4 pi f_start R / c (the chirp starts at f_start; the
+    fast-time term adds the sweep), R advancing with the target's speed
     along slow time (chirp_repetition_time_s within a frame,
     frame_repetition_time_s between frames). 12-bit ADC (offset 2048, noise
     from a seeded generator), then the SDK's scaling raw * 2 / 4095 - 1 in
@@ -116,7 +117,7 @@ def synthetic_frames(n_frames=N_FRAMES, seed=1):
     n_rx, n_chirp, n_sample = 3, cfg["num_chirps"], cfg["num_samples"]
     fs = cfg["sample_rate_Hz"]
     bw = cfg["end_frequency_Hz"] - cfg["start_frequency_Hz"]
-    fc = (cfg["end_frequency_Hz"] + cfg["start_frequency_Hz"]) / 2
+    f0 = cfg["start_frequency_Hz"]
     slope = bw / (n_sample / fs)
     t_fast = np.arange(n_sample) / fs
     targets = [  # (range at t=0 m, radial speed m/s, amplitude in ADC counts)
@@ -132,7 +133,7 @@ def synthetic_frames(n_frames=N_FRAMES, seed=1):
         for r0, v, amp in targets:
             r = r0 + v * t_slow                                   # (n_chirp,)
             fb = 2.0 * r * slope / C_MPS
-            phase = 2 * np.pi * fb[:, None] * t_fast[None, :] + 4 * np.pi * fc * r[:, None] / C_MPS
+            phase = 2 * np.pi * fb[:, None] * t_fast[None, :] + 4 * np.pi * f0 * r[:, None] / C_MPS
             sig += amp * np.cos(phase[None, :, :] + rx_phase[:, None, None])
         noise = rng.normal(0.0, 8.0, sig.shape)
         raw = np.clip(np.round(2048 + sig + noise), 0, 4095).astype(np.int64)
@@ -270,8 +271,9 @@ def main(sensds_root):
     proc = load(sensds_root, "core/processing.py", "ref_processing")
     rm = load(sensds_root, "core/range_map_v1.py", "ref_range_map_v1")
 
-    if OUT.exists():
-        shutil.rmtree(OUT)
+    for sub in ("real", "synthetic"):         # only what this script writes (README.md stays)
+        if (OUT / sub).exists():
+            shutil.rmtree(OUT / sub)
     real = np.load(ROOT / "test" / "fixtures" / "radar" / "python_frames.npy")[:N_FRAMES]
     inputs = {
         "real": (real, "first 10 frames of test/fixtures/radar/python_frames.npy (Infineon Radar SDK, 2026-10-19)"),
