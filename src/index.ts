@@ -25,6 +25,8 @@ import { RangeMapPlot } from './viz/range_plot.js';
 import { JET_LUT, JET_LUT_BYTES } from './viz/jet.js';
 import { data } from './data/index.ts';
 import { simulate } from './simulate/index.ts';
+import { capture } from './capture/index.ts';
+import { bench } from './bench/index.ts';
 
 /** Frame callback: one radar frame, Float32Array laid out [rx][chirp][sample] (3 x 128 x 256). */
 export type FrameCallback = (cube: Float32Array) => void;
@@ -101,6 +103,12 @@ export const radar = {
 
   /** Synthetic frames for targets at known range and speed. */
   simulate,
+
+  /** Save every frame a live session streamed, with a sidecar describing it. */
+  capture,
+
+  /** Live performance measurement helpers. */
+  bench,
 
   /** Lower level: the device class and frame decoding. */
   device: { RadarDevice, INFINEON_VID, unpackPacked12, rawToCube, frameBytesToCube, FrameAcquisitionFailed, FifoOverflow, FrameSizeNotSupported },

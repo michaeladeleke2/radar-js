@@ -4,11 +4,12 @@
 // An IIFE has no import.meta.url, which the worker clients use to find their
 // worker files, so that build takes it from the <script> tag's own URL.
 import { defineConfig } from 'vite';
+import { buildDefine } from './build_info.ts';
 
 export default defineConfig(({ mode }) => {
   const iife = mode === 'iife';
   return {
-    define: iife ? { 'import.meta.url': '__radarScriptUrl' } : {},
+    define: { ...buildDefine(), ...(iife ? { 'import.meta.url': '__radarScriptUrl' } : {}) },
     build: {
       outDir: 'dist-lib',
       emptyOutDir: !iife,

@@ -6,3 +6,5 @@ tests/.cache/
 tests/out/
 dist-lib/
 .claude/
+# Raw captures stay out of git (about 12 MB per 3 s clip); see data/README.md
+data/captures/
