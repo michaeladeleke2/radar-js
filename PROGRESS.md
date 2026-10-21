@@ -38,9 +38,9 @@ Done
   (range FFT, clutter removal, MTI, upper range bins summed), `stft`,
   `stftSpectrogram`, `spectrogramToDb`, `mtiHighpass`, plus scipy's `butter`
   and `lfilter` and numpy's `hanning`. All on `radar.dsp`.
-- `reference/python/make_stft_fixtures.py` runs SensDSv2's code, read only,
-  on `tests/fixtures/radar/python_frames.npy` and writes
-  `tests/fixtures/stft/`. `tests/stft.test.js` (15 tests): the MTI
+- `tools/make_stft_fixtures.py` runs SensDSv2's code, read only,
+  on `test/fixtures/radar/python_frames.npy` and writes
+  `test/fixtures/stft/`. `test/stft.test.js` (15 tests): the MTI
   coefficients, `lfilter` and the dB image match exactly; the slow-time signal
   and spectrogram (after FFTs) to ~5e-14 of the peak; `hanning` and other
   `butter` orders to 1e-15 (libm rounding). 68/68 pass.
@@ -56,6 +56,6 @@ Done
    calculation (lib_avian), so the register list is no longer fixed.
 3. `src/data/`: recording to .npy from the live stream (sensds-web Visualize
    tab's `saveFrames`).
-4. `src/simulate/`: synthetic frames (tests/synthetic.js is a start).
+4. `src/simulate/`: synthetic frames (test/synthetic.js is a start).
 5. Type declarations (`.d.ts`) for npm, and an npm publish once licensing for
    the Strata-derived files is settled for package distribution.

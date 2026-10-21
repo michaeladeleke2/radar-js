@@ -1,6 +1,6 @@
 // The STFT spectrogram method against SensDSv2 core/processing.py, run
-// unchanged on the 20 real radar frames (reference/python/make_stft_fixtures.py).
-import { test } from 'node:test';
+// unchanged on the 20 real radar frames (tools/make_stft_fixtures.py).
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseNpy, framesFromNpy } from '../src/data/npy.js';

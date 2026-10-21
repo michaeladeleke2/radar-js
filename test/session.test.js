@@ -2,7 +2,7 @@
 // the simulated board, with navigator.serial replaced by a picker that
 // returns it.
 
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 import { FakeBoard } from './fake_board.js';

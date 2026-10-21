@@ -1,7 +1,7 @@
 // End-to-end test of RadarDevice against a simulated board: request framing,
 // the open/start/stop command sequence, data packet reassembly and frame decode.
 
-import { test } from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 import { FakeBoard } from './fake_board.js';

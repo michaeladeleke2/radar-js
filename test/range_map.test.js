@@ -1,6 +1,6 @@
 // The range map views against range_map_v1.py and range_map_live.py, run
-// unchanged on 20 real radar frames (reference/python/make_range_map_fixtures.py).
-import { test } from 'node:test';
+// unchanged on 20 real radar frames (sensds-web reference/python/make_range_map_fixtures.py).
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseNpy, framesFromNpy } from '../src/data/npy.js';

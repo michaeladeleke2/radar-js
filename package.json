@@ -16,16 +16,18 @@
   ],
   "scripts": {
     "dev": "vite",
-    "test": "node --test \"tests/*.test.js\"",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
     "build:lib": "vite build --config vite.lib.config.ts && vite build --config vite.lib.config.ts --mode iife",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   },
   "engines": {
     "node": ">=22.18"

@@ -1,6 +1,6 @@
 // TEST INPUT ONLY, never used by the app. Integer-only synthetic radar
 // frames (a target with a varying Doppler shift over clutter and noise),
-// identical to synthetic_raw() in reference/python/make_viz_fixtures.py, so
+// identical to synthetic_raw() in sensds-web reference/python/make_viz_fixtures.py, so
 // the JS port and the Python reference are compared on exactly the same input.
 
 export const COS_TAB = Array.from({ length: 4096 }, (_, k) => Math.round(1000 * Math.cos(2 * Math.PI * k / 4096)) || 0);   // || 0: no negative zero
@@ -31,7 +31,7 @@ export function sdkScale(raw) {
 }
 
 // Antenna `ant` of sample `variant`, identical to synthetic_raw_variant() in
-// reference/python/make_analysis_fixtures.py. Even variants move toward the
+// sensds-web reference/python/make_analysis_fixtures.py. Even variants move toward the
 // radar ("push"), odd ones hold their range ("swipe").
 export function syntheticRawVariant(f, ant, variant, cosTab = COS_TAB, nChirp = 128, nSample = 256) {
   const raw = new Int32Array(nChirp * nSample);

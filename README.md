@@ -47,7 +47,7 @@ from `localhost`.
 ```bash
 npm install
 npm run dev        # demo on http://localhost:5173
-npm test           # node:test, compared with Python-generated fixtures
+npm test           # Vitest, compared with Python-generated fixtures
 npm run build      # typecheck + demo into dist/
 npm run build:lib  # dist-lib/radar.js and dist-lib/radar.iife.js
 ```

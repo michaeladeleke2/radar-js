@@ -3,10 +3,10 @@ Dev-time oracle for the STFT spectrogram port (src/dsp/stft*.ts and friends).
 Not part of the library.
 
 Runs SensDSv2's core/processing.py, read only, on the 20 real radar frames in
-tests/fixtures/radar/python_frames.npy and writes what it computes to
-tests/fixtures/stft/ for tests/stft.test.js:
+test/fixtures/radar/python_frames.npy and writes what it computes to
+test/fixtures/stft/ for test/stft.test.js:
 
-    python3 reference/python/make_stft_fixtures.py /Users/michaeladeleke/SensDSv2
+    python3 tools/make_stft_fixtures.py /Users/michaeladeleke/SensDSv2
 
 Saved (2-D arrays transposed to [column][frequency], the JS layout):
   hanning_256          _HANNING_WIN
@@ -30,8 +30,8 @@ import numpy as np
 import scipy
 from scipy.signal import butter, lfilter
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
-OUT = ROOT / "tests" / "fixtures" / "stft"
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+OUT = ROOT / "test" / "fixtures" / "stft"
 
 
 def load_processing(sensds_root):
@@ -46,7 +46,7 @@ def load_processing(sensds_root):
 def main(sensds_root):
     proc = load_processing(sensds_root)
     OUT.mkdir(parents=True, exist_ok=True)
-    frames = np.load(ROOT / "tests" / "fixtures" / "radar" / "python_frames.npy")
+    frames = np.load(ROOT / "test" / "fixtures" / "radar" / "python_frames.npy")
     arrays, index, offset = [], {}, 0
 
     def add(name, a):
