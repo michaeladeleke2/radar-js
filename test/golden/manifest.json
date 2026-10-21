@@ -1,0 +1,539 @@
+{
+  "generated_by": "tools/make_golden.py",
+  "sensds_commit": "85f0517508c0740175c94f5232c987b663a3f167",
+  "numpy": "2.4.3",
+  "scipy": "1.17.1",
+  "config": {
+    "frame_repetition_time_s": 0.1,
+    "chirp_repetition_time_s": 0.0003,
+    "num_chirps": 128,
+    "tdm_mimo": false,
+    "start_frequency_Hz": 58000000000.0,
+    "end_frequency_Hz": 63500000000.0,
+    "sample_rate_Hz": 1000000.0,
+    "num_samples": 256,
+    "rx_mask": 7,
+    "tx_mask": 1,
+    "tx_power_level": 31,
+    "lp_cutoff_Hz": 500000,
+    "hp_cutoff_Hz": 20000,
+    "if_gain_dB": 33
+  },
+  "antenna": 0,
+  "inputs": {
+    "real": {
+      "description": "first 10 frames of test/fixtures/radar/python_frames.npy (Infineon Radar SDK, 2026-10-19)",
+      "files": {
+        "input": {
+          "shape": [
+            10,
+            3,
+            128,
+            256
+          ],
+          "dtype": "<f4",
+          "source": "first 10 frames of test/fixtures/radar/python_frames.npy (Infineon Radar SDK, 2026-10-19); (n_frame, n_rx, n_chirp, n_sample)"
+        },
+        "doppler/range_window": {
+          "shape": [
+            256
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live._range_doppler_windows"
+        },
+        "doppler/doppler_window": {
+          "shape": [
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live._range_doppler_windows"
+        },
+        "doppler/range_fft_f0_re": {
+          "shape": [
+            512,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db, range FFT lines; (n_range_bins, n_chirp) (real part)"
+        },
+        "doppler/range_fft_f0_im": {
+          "shape": [
+            512,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db, range FFT lines; (n_range_bins, n_chirp) (imaginary part)"
+        },
+        "doppler/rdm_db_f0": {
+          "shape": [
+            512,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db(frame 0); (n_range_bins, doppler_fft_size)"
+        },
+        "doppler/raw_bins": {
+          "shape": [
+            10
+          ],
+          "dtype": "<i4",
+          "source": "doppler_spectrogram_live.select_range_bin_raw per frame"
+        },
+        "doppler/range_bins": {
+          "shape": [
+            10
+          ],
+          "dtype": "<i4",
+          "source": "doppler_spectrogram_live.smooth_range_bins(raw_bins, 512)"
+        },
+        "doppler/spectrogram": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_recorded(data, antenna=0)[0]; (n_frame, doppler_fft_size)"
+        },
+        "doppler/live_history": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "LiveDopplerProcessor(history_length=10).process_frame, history after the last frame"
+        },
+        "doppler/live_bins": {
+          "shape": [
+            10
+          ],
+          "dtype": "<i4",
+          "source": "LiveDopplerProcessor.process_frame range bin per frame"
+        },
+        "stft/range_fft_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 1-3; (256 range rows, first 128 slow-time columns) (real part)"
+        },
+        "stft/range_fft_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 1-3; (256 range rows, first 128 slow-time columns) (imaginary part)"
+        },
+        "stft/clutter_removed_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 4; (256, first 128 columns) (real part)"
+        },
+        "stft/clutter_removed_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 4; (256, first 128 columns) (imaginary part)"
+        },
+        "stft/mti_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 5, lfilter(_MTI_B, _MTI_A); (256, first 128 columns) (real part)"
+        },
+        "stft/mti_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 5, lfilter(_MTI_B, _MTI_A); (256, first 128 columns) (imaginary part)"
+        },
+        "stft/slow_time_mti_re": {
+          "shape": [
+            1280
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=True); (n_chirps,) (real part)"
+        },
+        "stft/slow_time_mti_im": {
+          "shape": [
+            1280
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=True); (n_chirps,) (imaginary part)"
+        },
+        "stft/slow_time_raw_re": {
+          "shape": [
+            1280
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=False); (n_chirps,) (real part)"
+        },
+        "stft/slow_time_raw_im": {
+          "shape": [
+            1280
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=False); (n_chirps,) (imaginary part)"
+        },
+        "stft/stft_mti_re": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f8",
+          "source": "processing._stft_hanning(slow_time_mti); (1024, n_cols) (real part)"
+        },
+        "stft/stft_mti_im": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f8",
+          "source": "processing._stft_hanning(slow_time_mti); (1024, n_cols) (imaginary part)"
+        },
+        "stft/spect_mti": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames(data, mti=True); (1024, n_cols)"
+        },
+        "stft/spect_raw": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames(data, mti=False); (1024, n_cols)"
+        },
+        "stft/db_mti": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f4",
+          "source": "processing.spectrogram_to_db(spect_mti); (1024, n_cols)"
+        },
+        "stft/mti_b": {
+          "shape": [
+            2
+          ],
+          "dtype": "<f8",
+          "source": "processing._MTI_B = butter(1, 0.01, 'high')"
+        },
+        "stft/mti_a": {
+          "shape": [
+            2
+          ],
+          "dtype": "<f8",
+          "source": "processing._MTI_A"
+        },
+        "range/range_axis_m": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.range_axis_m(512, 1024, config sample rate and frequencies)"
+        },
+        "range/profile_raw_f0": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.frame_profile(frame 0, mode='raw'); (n_range_bins,)"
+        },
+        "range/map_raw": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.compute_range_map(data, mode='raw')[0]; (n_frame, n_range_bins)"
+        },
+        "range/profile_mti_f0": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.frame_profile(frame 0, mode='mti'); (n_range_bins,)"
+        },
+        "range/map_mti": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.compute_range_map(data, mode='mti')[0]; (n_frame, n_range_bins)"
+        }
+      }
+    },
+    "synthetic": {
+      "description": "tools/make_golden.py synthetic_frames(): target 0.80 m at -0.50 m/s (toward the radar), static reflector 1.60 m, noise sd 8 counts, seed 1",
+      "files": {
+        "input": {
+          "shape": [
+            10,
+            3,
+            128,
+            256
+          ],
+          "dtype": "<f4",
+          "source": "tools/make_golden.py synthetic_frames(): target 0.80 m at -0.50 m/s (toward the radar), static reflector 1.60 m, noise sd 8 counts, seed 1; (n_frame, n_rx, n_chirp, n_sample)"
+        },
+        "doppler/range_window": {
+          "shape": [
+            256
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live._range_doppler_windows"
+        },
+        "doppler/doppler_window": {
+          "shape": [
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live._range_doppler_windows"
+        },
+        "doppler/range_fft_f0_re": {
+          "shape": [
+            512,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db, range FFT lines; (n_range_bins, n_chirp) (real part)"
+        },
+        "doppler/range_fft_f0_im": {
+          "shape": [
+            512,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db, range FFT lines; (n_range_bins, n_chirp) (imaginary part)"
+        },
+        "doppler/rdm_db_f0": {
+          "shape": [
+            512,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db(frame 0); (n_range_bins, doppler_fft_size)"
+        },
+        "doppler/raw_bins": {
+          "shape": [
+            10
+          ],
+          "dtype": "<i4",
+          "source": "doppler_spectrogram_live.select_range_bin_raw per frame"
+        },
+        "doppler/range_bins": {
+          "shape": [
+            10
+          ],
+          "dtype": "<i4",
+          "source": "doppler_spectrogram_live.smooth_range_bins(raw_bins, 512)"
+        },
+        "doppler/spectrogram": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_recorded(data, antenna=0)[0]; (n_frame, doppler_fft_size)"
+        },
+        "doppler/live_history": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "LiveDopplerProcessor(history_length=10).process_frame, history after the last frame"
+        },
+        "doppler/live_bins": {
+          "shape": [
+            10
+          ],
+          "dtype": "<i4",
+          "source": "LiveDopplerProcessor.process_frame range bin per frame"
+        },
+        "stft/range_fft_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 1-3; (256 range rows, first 128 slow-time columns) (real part)"
+        },
+        "stft/range_fft_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 1-3; (256 range rows, first 128 slow-time columns) (imaginary part)"
+        },
+        "stft/clutter_removed_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 4; (256, first 128 columns) (real part)"
+        },
+        "stft/clutter_removed_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 4; (256, first 128 columns) (imaginary part)"
+        },
+        "stft/mti_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 5, lfilter(_MTI_B, _MTI_A); (256, first 128 columns) (real part)"
+        },
+        "stft/mti_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 5, lfilter(_MTI_B, _MTI_A); (256, first 128 columns) (imaginary part)"
+        },
+        "stft/slow_time_mti_re": {
+          "shape": [
+            1280
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=True); (n_chirps,) (real part)"
+        },
+        "stft/slow_time_mti_im": {
+          "shape": [
+            1280
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=True); (n_chirps,) (imaginary part)"
+        },
+        "stft/slow_time_raw_re": {
+          "shape": [
+            1280
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=False); (n_chirps,) (real part)"
+        },
+        "stft/slow_time_raw_im": {
+          "shape": [
+            1280
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=False); (n_chirps,) (imaginary part)"
+        },
+        "stft/stft_mti_re": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f8",
+          "source": "processing._stft_hanning(slow_time_mti); (1024, n_cols) (real part)"
+        },
+        "stft/stft_mti_im": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f8",
+          "source": "processing._stft_hanning(slow_time_mti); (1024, n_cols) (imaginary part)"
+        },
+        "stft/spect_mti": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames(data, mti=True); (1024, n_cols)"
+        },
+        "stft/spect_raw": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames(data, mti=False); (1024, n_cols)"
+        },
+        "stft/db_mti": {
+          "shape": [
+            1024,
+            18
+          ],
+          "dtype": "<f4",
+          "source": "processing.spectrogram_to_db(spect_mti); (1024, n_cols)"
+        },
+        "stft/mti_b": {
+          "shape": [
+            2
+          ],
+          "dtype": "<f8",
+          "source": "processing._MTI_B = butter(1, 0.01, 'high')"
+        },
+        "stft/mti_a": {
+          "shape": [
+            2
+          ],
+          "dtype": "<f8",
+          "source": "processing._MTI_A"
+        },
+        "range/range_axis_m": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.range_axis_m(512, 1024, config sample rate and frequencies)"
+        },
+        "range/profile_raw_f0": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.frame_profile(frame 0, mode='raw'); (n_range_bins,)"
+        },
+        "range/map_raw": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.compute_range_map(data, mode='raw')[0]; (n_frame, n_range_bins)"
+        },
+        "range/profile_mti_f0": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.frame_profile(frame 0, mode='mti'); (n_range_bins,)"
+        },
+        "range/map_mti": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.compute_range_map(data, mode='mti')[0]; (n_frame, n_range_bins)"
+        }
+      }
+    }
+  }
+}
