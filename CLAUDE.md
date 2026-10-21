@@ -75,10 +75,10 @@ DSP output must match SensDSv2's Python output.
 - TypeScript files import each other with the `.ts` extension
   (`allowImportingTsExtensions`); only erasable TypeScript (no enums,
   namespaces or parameter properties).
-- Velocity sign in `radar.dsp.velocityAxis` and `radar.simulate`: negative is
-  toward the radar. The copied plot (`LiveSpectrogramPlot`, as SensDSv2's
-  matplotlib figure) labels the vertical axis the other way round; which sign
-  the real board gives is not yet checked (see PROGRESS.md).
+- Velocity sign: negative = toward the radar, everywhere (`radar.dsp.velocityAxis`,
+  `radar.simulate`, the plot, which draws it below the centre line). Checked on
+  the board (PROGRESS.md) and pinned by `test/velocity_sign.test.ts` with a
+  live recording.
 - Strata-derived files keep their `STRATA DERIVED` header (see LICENSING.md).
 - npm, Node 22 (CI). `npm test` (Vitest, `test/`), `npm run build` (typecheck +
   demo), `npm run build:lib` (dist-lib/radar.js and radar.iife.js).
@@ -98,6 +98,11 @@ Keep this list current when a copied file has to change.
   state event.
 - `src/dsp/range_map.js`: `rangeSpectrum` is exported (one word), for
   `radar.dsp.rangeFft`.
+- `src/viz/image.js`: `historyToPlotData` reverses the Doppler rows, so the
+  most positive velocity is drawn at the top beside the +max label. SensDSv2's
+  figure (and the sensds-web copy) draws toward-the-radar at the top, against
+  its own labels; found with the board on 2026-10-21. `test/viz.test.js` still
+  compares `makeImage` with matplotlib using SensDSv2's unreversed data.
 - `test/fake_board.js`: the simulated board, moved out of `device.test.js`
   and taught the board-info request.
 

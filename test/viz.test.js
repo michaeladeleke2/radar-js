@@ -78,7 +78,11 @@ test('image pixels match a real matplotlib render (640x480, grid off)', () => {
   const ref = readFileSync(new URL('render_640x480_nogrid.rgba', FIX));
   const [bx, by, bw, bh] = meta.render_nogrid.axes_bbox_px;
   const history = f64('history_10x512.f64');
-  const plot = historyToPlotData(history, meta.history_length, 512);
+  // SensDSv2's own plot_data (history.T, not reversed), so this compares
+  // makeImage with matplotlib's imshow; historyToPlotData's row reversal (the
+  // radar-js velocity-sign fix) is checked in its own test below.
+  const plot = new Float64Array(512 * meta.history_length);
+  for (let t = 0; t < meta.history_length; t++) for (let d = 0; d < 512; d++) plot[d * meta.history_length + t] = history[t * 512 + d];
   const { vmin, vmax } = jetClim(plot, -20);
   const img = makeImage(plot, 512, meta.history_length, bw, bh, vmin, vmax);
   assert.equal(img.stage, 'rgba');
@@ -100,6 +104,14 @@ test('image pixels match a real matplotlib render (640x480, grid off)', () => {
   console.log(`  image vs matplotlib: mean |diff| ${mean.toFixed(3)}, max ${max}, values off by >2: ${(100 * over2 / n).toFixed(2)}%`);
   assert.ok(mean < 1.0, `mean |diff| ${mean}`);
   assert.ok(over2 / n < 0.01, `share off by more than 2: ${over2 / n}`);
+});
+
+test('historyToPlotData puts the most positive velocity (highest Doppler bin) at the top', () => {
+  // 2 frames x 4 Doppler bins: value = 10 * frame + bin
+  const history = Float64Array.from([0, 1, 2, 3, 10, 11, 12, 13]);
+  const plot = historyToPlotData(history, 2, 4);
+  // rows top to bottom = bins 3, 2, 1, 0; columns = frames
+  assert.deepEqual(Array.from(plot), [3, 13, 2, 12, 1, 11, 0, 10]);
 });
 
 test('JS cosine table equals the Python one', async () => {

@@ -126,10 +126,17 @@ export function makeImage(plotData, rows, cols, outWBase, outHBase, vmin, vmax) 
   return { rgba, outW, outH, stage, interpolation };
 }
 
-// LiveSpectrogramPlot.draw, frame_x orientation: plot_data = history.T
+// LiveSpectrogramPlot.draw, frame_x orientation: plot_data = history.T with
+// the Doppler rows reversed, so the highest Doppler bin (the most positive
+// velocity) is row 0, drawn at the top, where the +max_speed label is.
+// radar-js change: SensDSv2 uses history.T unreversed with origin='upper'
+// and extent [.., -max, +max], which draws bin 0 (most negative velocity,
+// toward the radar) at the top beside the +max label. Checked on the board
+// 2026-10-21: a hand moving toward the radar showed above the centre while its
+// range fell (PROGRESS.md). Now toward the radar is below the centre.
 export function historyToPlotData(history, historyLength, dopplerBins) {
   const out = new Float64Array(dopplerBins * historyLength);
   for (let t = 0; t < historyLength; t++)
-    for (let d = 0; d < dopplerBins; d++) out[d * historyLength + t] = history[t * dopplerBins + d];
+    for (let d = 0; d < dopplerBins; d++) out[(dopplerBins - 1 - d) * historyLength + t] = history[t * dopplerBins + d];
   return out;
 }

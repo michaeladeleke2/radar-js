@@ -106,14 +106,8 @@ Verified another way (no SensDSv2 function to compare with)
   `trackTable` follows the synthetic target.
 
 Not verified
-- **Velocity sign on the real board.** radar.js (and the simulation) use
-  negative = toward the radar, which is what a real-valued IF gives. The
-  spectrogram plot copied from SensDSv2 (`LiveSpectrogramPlot`, matplotlib
-  `origin="upper"`) draws negative Doppler bins at the top, labelled positive:
-  in the demo a simulated target moving away shows below the centre. sensds-web's
-  readout says "toward radar below the center", which contradicts its own
-  plot. Needs one test with the board: move a hand toward the radar and note
-  which way the trace goes.
+- ~~Velocity sign on the real board~~: checked and fixed, see the section
+  "velocity sign, checked on the board".
 - The .npy layout against a real Radar Fusion GUI file (none on this
   machine); it matches what SensDSv2 reads.
 - Record and Live mode together on the board (Record was checked with the
@@ -122,10 +116,33 @@ Not verified
   have no public function of their own; they are covered through
   `mtiHighpass` and `slowTimeSignal`.
 
+## 2026-10-21: velocity sign, checked on the board
+
+The spectrogram plot was upside down; radar.dsp was right.
+
+- Test: a hand moved toward the radar and away, recorded live with radar-js
+  (23 s, 230 frames). The owner saw "toward" go **above** the centre line.
+- Objective check: over the recording, the range trend (loudest cell of each
+  frame's range-Doppler map) and the sign of its Doppler velocity agreed in
+  89 of 90 moving frames: range falling with negative velocity, rising with
+  positive. So negative = toward the radar, as `radar.dsp.velocityAxis` and
+  `radar.simulate` already had it.
+- The copied plot drew Doppler bin 0 (most negative) at the top beside the
+  +4.11 m/s label, because SensDSv2's figure uses `origin="upper"` with
+  extent [-max, +max] (`core/doppler_spectrogram_live.py:362-373`; the
+  recorded plot at :288-293 has the same layout). Fixed in radar-js
+  (`historyToPlotData` reverses the rows): toward the radar now shows below the
+  centre, with negative labels.
+- **sensds-web's readout is wrong** about its own plot: `src/app/visualize.js:112`
+  says "Toward radar below the center", but its plot (the same code) draws
+  toward above the centre. Not edited (read only). SensDSv2's plots carry the
+  same inversion.
+- Pinned by `test/velocity_sign.test.ts` with 10 frames of that recording
+  (`test/fixtures/sign/hand_away_toward.npy`).
+
 ## Next
 
-1. Velocity sign: one test with the board (above), then make the plot labels
-   and `velocityAxis` agree.
+1. ~~Velocity sign~~ (done 2026-10-21).
 2. Compare a live capture with SensDSv2 frame by frame, and show the STFT
    spectrogram in the demo next to the Doppler one.
 3. `configure()` for other chirp settings: port the SDK's register
