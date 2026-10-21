@@ -19,7 +19,10 @@ Done
 - `src/index.ts` exports `radar` (connect, configure, start, stop, onFrame,
   dsp, viz, data, device). Builds: ES module and plain-script IIFE.
 - Demo page (demo/): Connect, board info, Start/Stop, live spectrogram with
-  sensds-web's settings and look. Deployed to GitHub Pages on push to main.
+  sensds-web's settings and look. Deployed to GitHub Pages on push to main
+  (https://michaeladeleke2.github.io/radar-js/). The repository is public:
+  the GitHub plan does not allow Pages on a private repository. Steps in
+  docs/DEPLOY.md.
 
 Not checked yet
 - The demo against a real board (no board was attached while building it).
