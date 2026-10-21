@@ -66,6 +66,18 @@
   .note { font-size: 12px; color: var(--bad); }
   .hint { font-size: 12px; color: var(--faint); }
 
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid var(--input-border); border-radius: var(--radius-sm); overflow: hidden; }
+  .modes button { border: none; border-radius: 0; font-weight: 600; padding: 7px 4px; }
+  .modes button + button { border-left: 1px solid var(--input-border); }
+  .modes button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+  .panel { display: flex; flex-direction: column; gap: 10px; }
+  .slider { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; font-size: 13px; }
+  .slider output { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); }
+  label.check { display: flex; gap: 6px; align-items: center; font-size: 13px; cursor: pointer; }
+  button.rec[aria-pressed="true"] { background: var(--bad); border-color: var(--bad); color: #fff; }
+  #fileInfo { font-size: 12px; color: var(--subtext); overflow-wrap: anywhere; }
+
   @media (max-width: 760px) {
     header { padding: 16px; }
     main { flex-direction: column; padding: 16px; }
@@ -82,29 +94,61 @@
 </header>
 <main>
   <section class="side" aria-label="Radar controls">
-    <button id="connectBtn" class="primary" disabled>Connect</button>
-    <p id="noSerial" class="note" hidden>This browser has no Web Serial. Open this page in Chrome or Edge on a computer.</p>
-
-    <div class="label">Board</div>
-    <dl>
-      <dt>Name</dt><dd id="boardName">–</dd>
-      <dt>Firmware</dt><dd id="firmware">–</dd>
-      <dt>Chip</dt><dd id="chip">–</dd>
-    </dl>
-    <hr>
-    <div class="row">
-      <button id="startBtn" disabled>Start</button>
-      <button id="stopBtn" disabled>Stop</button>
+    <div class="modes" role="group" aria-label="Data source">
+      <button id="mode-live" aria-pressed="true">Live</button>
+      <button id="mode-file" aria-pressed="false">File</button>
+      <button id="mode-sim" aria-pressed="false">Simulate</button>
     </div>
+
+    <div id="panel-live" class="panel">
+      <button id="connectBtn" class="primary" disabled>Connect</button>
+      <p id="noSerial" class="note" hidden>This browser has no Web Serial. Open this page in Chrome or Edge on a computer, or try File or Simulate.</p>
+      <div class="label">Board</div>
+      <dl>
+        <dt>Name</dt><dd id="boardName">–</dd>
+        <dt>Firmware</dt><dd id="firmware">–</dd>
+        <dt>Chip</dt><dd id="chip">–</dd>
+      </dl>
+      <div class="row">
+        <button id="startBtn" disabled>Start</button>
+        <button id="stopBtn" disabled>Stop</button>
+      </div>
+    </div>
+
+    <div id="panel-file" class="panel" hidden>
+      <button id="loadBtn" class="primary">Load a recording…</button>
+      <input id="fileInput" type="file" accept=".npy,.json" hidden>
+      <div id="fileInfo">.npy (frames, antennas, chirps, samples) as SensDSv2 and Record save it, or a radar.js JSON recording. No board needed.</div>
+      <div class="row">
+        <button id="playBtn" disabled>Play</button>
+        <button id="pauseBtn" disabled>Pause</button>
+      </div>
+      <label class="check"><input id="loopChk" type="checkbox" checked> Loop</label>
+      <button id="csvBtn" disabled title="One row per frame: time, range, velocity and power of the strongest moving target (radar.data.trackTable)">Save track as CSV</button>
+    </div>
+
+    <div id="panel-sim" class="panel" hidden>
+      <div class="slider"><label for="simRange">Distance</label><output id="simRangeOut">1.00 m</output><input id="simRange" type="range" min="0.3" max="3" step="0.05" value="1"></div>
+      <div class="slider"><label for="simSpeed">Hand speed (peak)</label><output id="simSpeedOut">1.0 m/s</output><input id="simSpeed" type="range" min="0" max="3.5" step="0.1" value="1"></div>
+      <div class="slider"><label for="simNoise">Noise</label><output id="simNoiseOut">8 counts</output><input id="simNoise" type="range" min="0" max="60" step="1" value="8"></div>
+      <div class="row">
+        <button id="simStartBtn" class="primary">Start</button>
+        <button id="simStopBtn" disabled>Stop</button>
+      </div>
+      <p class="hint">A target swinging back and forth around the distance, made by radar.simulate in the browser.</p>
+    </div>
+
+    <hr>
+    <button id="recBtn" class="rec" aria-pressed="false" disabled title="Save the live or simulated stream as .npy (up to 60 s)">Record</button>
     <div id="status"><span id="dot" class="dot"></span><span id="statusText">Not connected.</span></div>
     <dl>
       <dt>Frames</dt><dd id="frames">0</dd>
       <dt>Dropped</dt><dd id="drops">0</dd>
     </dl>
     <hr>
-    <p class="hint">Plug in the Radar Baseboard MCU7 by USB, close any desktop app using it, then Connect and pick the Infineon port.</p>
+    <p class="hint" id="liveHint">Plug in the Radar Baseboard MCU7 by USB, close any desktop app using it, then Connect and pick the Infineon port.</p>
   </section>
-  <section class="plotcard" aria-label="Live Doppler spectrogram">
+  <section class="plotcard" aria-label="Doppler spectrogram">
     <canvas id="plot"></canvas>
   </section>
 </main>

@@ -4,7 +4,7 @@ import type { Recording } from '../data/recording.ts';
 
 /** A point target. */
 export interface Target {
-  /** Distance at time startTime_s, metres. */
+  /** Distance at the start of the first frame, metres. */
   range_m: number;
   /** Radial speed, m/s; negative moves toward the radar. Default 0. */
   speed_m_s?: number;
@@ -20,8 +20,6 @@ export interface SimulateOptions {
   nFrames?: number;
   /** Gaussian noise, standard deviation in ADC counts. Default 8. */
   noise?: number;
-  /** Time of the first frame, seconds (frames follow every frame_repetition_time_s). Default 0. */
-  startTime_s?: number;
   /** Seed for the noise, so a simulation repeats exactly. Default 1. */
   seed?: number;
 }
@@ -40,11 +38,11 @@ export interface SimulateOptions {
  * raw * 2 / 4095 - 1 in float32.
  *
  * @param config radar settings, the format radar.configure checks
- * @param options targets, nFrames, noise, startTime_s, seed
+ * @param options targets, nFrames, noise, seed
  * @returns a Recording (frames, rx, chirps, samples), usable by radar.dsp and radar.data
  */
 export function frames(config: RadarConfig, options: SimulateOptions): Recording {
-  const { targets, nFrames = 1, noise = 8, startTime_s = 0, seed = 1 } = options;
+  const { targets, nFrames = 1, noise = 8, seed = 1 } = options;
   const nRx = popcount(config.rx_mask), nChirp = config.num_chirps, nSample = config.num_samples;
   const fs = config.sample_rate_Hz;
   const bw = config.end_frequency_Hz - config.start_frequency_Hz;
@@ -58,7 +56,7 @@ export function frames(config: RadarConfig, options: SimulateOptions): Recording
   for (let f = 0; f < nFrames; f++) {
     for (let rx = 0; rx < nRx; rx++) {
       for (let c = 0; c < nChirp; c++) {
-        const t = startTime_s + f * config.frame_repetition_time_s + c * config.chirp_repetition_time_s;
+        const t = f * config.frame_repetition_time_s + c * config.chirp_repetition_time_s;
         sig.fill(0);
         for (const tg of targets) {
           const r = tg.range_m + (tg.speed_m_s ?? 0) * t;
