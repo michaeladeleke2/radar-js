@@ -3,13 +3,22 @@
 //
 // The radar code is loaded only on Connect Radar, so the page still works for
 // recordings in a browser without Web Serial.
+//
+// radar-js change: sensds-web's connectRadar() opened the board and started
+// streaming in one step. Here it is split into connectRadar() (port picker and
+// handshake), startRadar() and stopRadar(); the streaming loop, restart and
+// reconnect logic are unchanged. A generation number stops a loop left over
+// from an earlier start from acting after a new start.
 
 const subscribers = new Set();
 const stateListeners = new Set();
-const session = { port: null, device: null, running: false, drops: 0, frames: 0, mod: null, restarts: 0, goodSinceRestart: 0 };
+const session = { port: null, device: null, running: false, drops: 0, frames: 0, mod: null, restarts: 0, goodSinceRestart: 0, gen: 0, info: null };
 const MAX_RESTARTS = 3;          // in a row, before giving up
 
 export const isConnected = () => Boolean(session.device);
+export const isStreaming = () => session.running;
+// { firmware, chip, board } from the handshake, or null when not connected
+export const boardInfo = () => session.info;
 export const radarStats = () => ({ frames: session.frames, drops: session.drops });
 export const hasWebSerial = () => 'serial' in navigator;
 
@@ -17,9 +26,9 @@ export const hasWebSerial = () => 'serial' in navigator;
 // get_next_frame()[0]. A new array every frame.
 export function subscribeFrames(fn) { subscribers.add(fn); return () => subscribers.delete(fn); }
 
-// fn({ connected, message, restarted })
-export function onRadarState(fn) { stateListeners.add(fn); }
-const emit = (connected, message, restarted = false) => { for (const fn of stateListeners) fn({ connected, message, restarted }); };
+// fn({ connected, streaming, message, restarted })
+export function onRadarState(fn) { stateListeners.add(fn); return () => stateListeners.delete(fn); }
+const emit = (connected, message, restarted = false) => { for (const fn of stateListeners) fn({ connected, streaming: session.running, message, restarted }); };
 
 export async function connectRadar() {
   try { session.mod = await import('./device.js'); }
@@ -31,32 +40,53 @@ export async function connectRadar() {
 
   emit(false, 'Connecting to the radar…');
   const device = new session.mod.RadarDevice(port, { log: m => console.debug('[radar]', m) });
+  let info;
   try {
-    const { firmware } = await device.open();
-    emit(false, `Radar found: BGT60TR13C, firmware ${firmware}. Starting…`);
-    await device.start();
+    info = await device.open();
   } catch (e) {
     await device.close().catch(() => {});
-    emit(false, `Could not start the radar: ${e.message}`);
+    emit(false, `Could not connect to the radar: ${e.message}`);
     return false;
   }
-  Object.assign(session, { port, device, running: true, drops: 0, frames: 0, restarts: 0, goodSinceRestart: 0 });
+  Object.assign(session, { port, device, running: false, info });
+  emit(true, `Radar found: ${info.board || 'board'}, BGT60TR13C, firmware ${info.firmware}.`);
+  return info;
+}
+
+export async function startRadar() {
+  if (!session.device || session.running) return false;
+  try {
+    await session.device.start();
+  } catch (e) {
+    emit(true, `Could not start the radar: ${e.message}`);
+    return false;
+  }
+  Object.assign(session, { running: true, drops: 0, frames: 0, restarts: 0, goodSinceRestart: 0 });
   emit(true, 'Radar streaming: BGT60TR13C, 3 antennas, 10 frames per second.');
-  loop();
+  loop(++session.gen);
   return true;
 }
 
-async function loop() {
+export async function stopRadar() {
+  if (!session.device || !session.running) return;
+  session.running = false;
+  try { await session.device.stop(); }
+  catch (e) { console.warn('[radar] stop failed:', e.message); }
+  emit(true, `Radar stopped after ${session.frames} frames.`);
+}
+
+async function loop(gen) {
   const { mod } = session;
-  while (session.running) {
+  const live = () => session.running && session.gen === gen;
+  while (live()) {
     try {
       const cube = await session.device.nextFrame();
-      if (!session.running) break;
+      if (!live()) break;
       session.frames++;
       if (++session.goodSinceRestart >= 50) session.restarts = 0;   // streaming fine again
       for (const fn of subscribers) fn(cube);
     } catch (e) {
-      if (!session.running) break;
+      if (!live()) break;
       // Dropped frames are skipped and streaming continues, as in SensDSv2.
       if (e instanceof mod.FrameAcquisitionFailed) { session.drops++; continue; }
       // A FIFO overflow or a gap in the data (the page was busy and the board's
@@ -108,6 +138,7 @@ export async function disconnectRadar(message) {
   const device = session.device;
   session.running = false;
   session.device = null;
+  session.info = null;
   if (device) await device.close();
   emit(false, message ?? `Radar disconnected after ${session.frames} frames.`);
 }

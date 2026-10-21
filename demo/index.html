@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>radar.js demo</title>
+<link rel="icon" href="./favicon.png">
+<style>
+  /* Palette from sensds-web (light and dark). */
+  :root {
+    --bg: #f3f6fa; --panel: #ffffff; --border: #e3e9f1; --input-bg: #f8fafc; --input-border: #d4dce7;
+    --text: #0f2340; --subtext: #4a5b73; --faint: #7a889c; --accent: #1766c2; --tab-hover: #eef3f9;
+    --divider: #edf1f6; --on-accent: #ffffff; --ok: #1f9d55; --bad: #c53030;
+    --shadow: 0 1px 2px rgba(15, 35, 64, 0.06), 0 4px 14px rgba(15, 35, 64, 0.06);
+    --radius: 12px; --radius-sm: 8px;
+    --mono: Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1220; --panel: #111a2b; --border: #1e2a3f; --input-bg: #0d1625; --input-border: #2a3a55;
+      --text: #e6edf7; --subtext: #a8b5c8; --faint: #7a89a0; --accent: #4fb0ff; --tab-hover: #17233a;
+      --divider: #1a2537; --on-accent: #06182e;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1220; --panel: #111a2b; --border: #1e2a3f; --input-bg: #0d1625; --input-border: #2a3a55;
+    --text: #e6edf7; --subtext: #a8b5c8; --faint: #7a89a0; --accent: #4fb0ff; --tab-hover: #17233a;
+    --divider: #1a2537; --on-accent: #06182e;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
+
+  header { padding: 20px 24px 14px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  h1 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  h1 .js { color: var(--accent); }
+  .tagline { margin: 4px 0 0; color: var(--subtext); }
+
+  main { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
+  .side { width: 280px; flex: none; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .plotcard { flex: 1; min-width: 0; background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 8px; }
+  #plot { width: 100%; height: min(70vh, 560px); display: block; }
+
+  button { font: inherit; font-weight: 600; color: var(--text); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--tab-hover); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); }
+  .row { display: flex; gap: 8px; }
+  .row button { flex: 1; }
+
+  .label { font-size: 12px; font-weight: 700; color: var(--subtext); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 13px; }
+  dt { color: var(--subtext); }
+  dd { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--accent); overflow-wrap: anywhere; }
+  hr { border: none; border-top: 1px solid var(--divider); margin: 2px 0; width: 100%; }
+  #status { font-size: 12px; color: var(--subtext); min-height: 2.9em; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); margin-right: 6px; vertical-align: 1px; }
+  .dot.on { background: var(--ok); }
+  .note { font-size: 12px; color: var(--bad); }
+  .hint { font-size: 12px; color: var(--faint); }
+
+  @media (max-width: 760px) {
+    header { padding: 16px; }
+    main { flex-direction: column; padding: 16px; }
+    .side { width: 100%; }
+    .plotcard { width: 100%; }
+    #plot { height: 60vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>radar<span class="js">.js</span> demo</h1>
+  <p class="tagline">A JavaScript library for the Infineon BGT60TR13C radar. It runs in the browser, with nothing to install.</p>
+</header>
+<main>
+  <section class="side" aria-label="Radar controls">
+    <button id="connectBtn" class="primary" disabled>Connect</button>
+    <p id="noSerial" class="note" hidden>This browser has no Web Serial. Open this page in Chrome or Edge on a computer.</p>
+
+    <div class="label">Board</div>
+    <dl>
+      <dt>Name</dt><dd id="boardName">–</dd>
+      <dt>Firmware</dt><dd id="firmware">–</dd>
+      <dt>Chip</dt><dd id="chip">–</dd>
+    </dl>
+    <hr>
+    <div class="row">
+      <button id="startBtn" disabled>Start</button>
+      <button id="stopBtn" disabled>Stop</button>
+    </div>
+    <div id="status"><span id="dot" class="dot"></span><span id="statusText">Not connected.</span></div>
+    <dl>
+      <dt>Frames</dt><dd id="frames">0</dd>
+      <dt>Dropped</dt><dd id="drops">0</dd>
+    </dl>
+    <hr>
+    <p class="hint">Plug in the Radar Baseboard MCU7 by USB, close any desktop app using it, then Connect and pick the Infineon port.</p>
+  </section>
+  <section class="plotcard" aria-label="Live Doppler spectrogram">
+    <canvas id="plot"></canvas>
+  </section>
+</main>
+<script type="module" src="./main.ts"></script>
+</body>
+</html>

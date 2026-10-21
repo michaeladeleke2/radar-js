@@ -1,0 +1,33 @@
+{
+  "name": "radar-js",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "JavaScript library for the Infineon BGT60TR13C radar (Radar Baseboard MCU7) over Web Serial",
+  "main": "./dist-lib/radar.js",
+  "module": "./dist-lib/radar.js",
+  "exports": {
+    ".": "./dist-lib/radar.js"
+  },
+  "files": [
+    "dist-lib",
+    "src",
+    "LICENSING.md"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "test": "node --test \"tests/*.test.js\"",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "build:lib": "vite build --config vite.lib.config.ts && vite build --config vite.lib.config.ts --mode iife",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}

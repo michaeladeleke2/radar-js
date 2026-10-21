@@ -29,6 +29,10 @@ export const INFINEON_VID = 0x058B;
 const DATA_INDEX = 0;                 // DeviceFmcwBase: m_data_index = 0
 const FRAME_TIMEOUT_MS = 10000;       // ifx_fmcw_get_next_frame
 const REQ_BOARD_INFO = 0x80, WVALUE_VERSION = 0x01;
+// radar-js addition: the board name read, copied from sensds-web's
+// tools/sensds_web_step1_connect.html (Strata BOARD_INFO request).
+const WVALUE_BOARD_INFO = 0x00;
+const cstring = bytes => { const end = bytes.indexOf(0); return new TextDecoder().decode(bytes.subarray(0, end < 0 ? bytes.length : end)); };
 const HOST_PROTOCOL_MAJOR = 4;
 
 export { FrameAcquisitionFailed, FifoOverflow, FrameSizeNotSupported } from './strata.js';
@@ -64,6 +68,13 @@ export class RadarDevice {
     }
     if (!this.link) throw lastError;
 
+    // radar-js addition: board name (u16 VID, u16 PID, then a C string). Only
+    // for display, so a board that does not answer still connects.
+    try {
+      const bi = await this.link.vendorTransfer(REQ_BOARD_INFO, WVALUE_BOARD_INFO, 0, null, 256);
+      this.board = cstring(bi.subarray(4));
+    } catch (e) { this.log('Board info not read: ' + e.message); this.board = ''; }
+
     // Driver::create_driver: chip reset, then read_device_type
     await pinsReset(this.link);
     await executeSpiWords(this.link, [sfctlCommand()]);
@@ -73,7 +84,7 @@ export class RadarDevice {
       await this.close();
       throw new Error(`Radar chip not supported (CHIP_ID 0x${chipId.toString(16)}); expected BGT60TR13C`);
     }
-    return { firmware: this.firmware, chip: this.chip };
+    return { firmware: this.firmware, chip: this.chip, board: this.board };
   }
 
   async start() {
