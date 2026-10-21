@@ -24,11 +24,12 @@ Done
   the GitHub plan does not allow Pages on a private repository. Steps in
   docs/DEPLOY.md.
 
-Not checked yet
-- The demo against a real board (no board was attached while building it).
-  The spectrogram path was checked in the browser with synthetic frames.
+Checked on hardware
+- The demo with the radar plugged in (reported by the project owner,
+  2026-10-21): Connect and handshake, board info, Start/Stop and the live
+  spectrogram all work.
 
-## 2026-10-21: STFT spectrogram method (branch `stft-spectrogram`)
+## 2026-10-21: STFT spectrogram method (merged into main)
 
 Done
 - Ported SensDSv2's other spectrogram method from `core/processing.py`
@@ -48,8 +49,9 @@ Done
 
 ## Next
 
-1. Try the demo with the board; compare a capture with SensDSv2 (sensds-web's
-   `scripts/compare_frames.mjs` approach).
+1. Compare a live capture with SensDSv2 frame by frame (sensds-web's
+   `scripts/compare_frames.mjs` approach), and show the STFT spectrogram
+   in the demo next to the live one.
 2. `configure()` for other chirp settings: port the SDK's register
    calculation (lib_avian), so the register list is no longer fixed.
 3. `src/data/`: recording to .npy from the live stream (sensds-web Visualize
