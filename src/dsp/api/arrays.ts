@@ -39,7 +39,8 @@ export function flatMatrix(m: Matrix): { data: Float64Array; rows: number; cols:
     }
     return { data, rows, cols };
   }
-  const { data, shape } = m as { data: ArrayLike<number>; shape: [number, number] };
+  const { data, shape } = m as { data: ArrayLike<number>; shape: number[] };
+  if (shape.length !== 2) throw new Error(`Expected one frame or matrix, shape [rows, cols]; got [${shape.join(', ')}]. Pick a frame and antenna first.`);
   const [rows, cols] = shape;
   if (data.length !== rows * cols) throw new Error(`data has ${data.length} values, shape needs ${rows * cols}`);
   return { data: Float64Array.from(data), rows, cols };
