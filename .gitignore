@@ -10,3 +10,5 @@ dist-lib/
 data/captures/
 # Live verification captures (about 236 MB per 60 s; the set is about 1 GB); see docs/verification-summary.md
 test/captures/
+# Python environment with the Infineon SDK, for tools/sdk_capture.py (not committed)
+.venv-sdk/
