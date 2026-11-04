@@ -93,13 +93,20 @@ async function loop(gen) {
       for (const fn of subscribers) fn(cube, meta);
     } catch (e) {
       if (!live()) break;
-      // Dropped frames are skipped and streaming continues, as in SensDSv2.
-      if (e instanceof mod.FrameAcquisitionFailed) { session.drops++; continue; }
+      // radar-js change: a dropped slice also restarts the acquisition.
+      // sensds-web (as SensDSv2 and the SDK's get_next_raw_frame) skipped it and
+      // went on, but the reader then starts its next frame at whatever slice
+      // comes next, mid-frame, and every later frame stays shifted (found on the
+      // board 2026-11-04: antennas rotated, chirps cut 86 samples late; see
+      // PROGRESS.md and test/frame_alignment.test.ts). A restart begins again
+      // at a true frame boundary.
+      const dropped = e instanceof mod.FrameAcquisitionFailed;
+      if (dropped) session.drops++;
       // A FIFO overflow or a gap in the data (the page was busy and the board's
       // buffer filled) does not need a new connection: restart the acquisition.
       // The desktop stops here; it reads the radar on its own thread, so it
       // rarely falls behind.
-      const recoverable = e instanceof mod.FifoOverflow || e instanceof mod.FrameSizeNotSupported || /Timeout waiting for radar data/.test(e.message);
+      const recoverable = dropped || e instanceof mod.FifoOverflow || e instanceof mod.FrameSizeNotSupported || /Timeout waiting for radar data/.test(e.message);
       if (recoverable && session.restarts < MAX_RESTARTS) {
         session.restarts++; session.goodSinceRestart = 0;
         console.warn('[radar] restarting acquisition after:', e.message);

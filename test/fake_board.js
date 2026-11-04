@@ -51,7 +51,9 @@ export class FakeBoard {
       const last = r.payload.subarray(r.payload.length - 4);
       if (last[0] === 0x01 && (last[3] & 1)) {
         this.triggers = (this.triggers || 0) + 1;
-        setTimeout(() => (this.overflowOnTrigger === this.triggers ? this.sendOverflow() : this.streamFrame()), 0);
+        setTimeout(() => (this.overflowOnTrigger === this.triggers ? this.sendOverflow()
+          : this.frameList ? this.frameList.forEach((f, i) => this.streamFrame(f, this.lose?.trigger === this.triggers && this.lose.frame === i ? this.lose.slice : -1))
+          : this.streamFrame()), 0);
       }
     }
   }
@@ -62,14 +64,19 @@ export class FakeBoard {
     this.send(withCrc([0xDB, 0, c & 0xFF, c >> 8, 4, 0, 0x07, 0, 0, 0]));
   }
 
-  streamFrame() {
+  // Streams one frame as slices of data packets. Test options: set frameList
+  // to stream several frames per trigger, and lose = { trigger, frame, slice }
+  // to lose the second packet of that slice (its counter is skipped, as on a
+  // real link that dropped it).
+  streamFrame(frameBytes = this.frameBytes, loseSlice = -1) {
     const sliceBytes = 12288;
-    for (let s = 0; s < this.frameBytes.length; s += sliceBytes) {
-      const slice = this.frameBytes.subarray(s, s + sliceBytes);
-      for (let p = 0; p < slice.length; p += 4084) {
+    for (let s = 0, k = 0; s < frameBytes.length; s += sliceBytes, k++) {
+      const slice = frameBytes.subarray(s, s + sliceBytes);
+      for (let p = 0, n = 0; p < slice.length; p += 4084, n++) {
         const chunk = slice.subarray(p, p + 4084);
         const type = 0xD0 | (p === 0 ? 1 : 0) | (p + 4084 >= slice.length ? 2 : 0);
         const c = this.counter++ & 0xFFFF;
+        if (k === loseSlice && n === 1) continue;
         this.send(withCrc([type, 0, c & 0xFF, c >> 8, chunk.length & 0xFF, chunk.length >> 8, ...chunk]));
       }
     }

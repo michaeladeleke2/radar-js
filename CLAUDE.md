@@ -106,6 +106,11 @@ Keep this list current when a copied file has to change.
   `lastFrameMeta`; the session hands `{ index, counter, timestamp }` to
   `onFrame` subscribers as a second argument. Frame data and timing are
   unchanged. Tested in `test/frame_meta.test.ts`.
+- `src/device/session.js`: a dropped slice (`FrameAcquisitionFailed`) now
+  restarts the acquisition instead of being skipped. Skipping (sensds-web,
+  SensDSv2 and the SDK's `get_next_raw_frame`) leaves every later frame
+  starting mid-stream: antennas rotated and chirps cut in the wrong place.
+  Found on the board 2026-11-04; `test/frame_alignment.test.ts`.
 - `src/viz/image.js`: `historyToPlotData` reverses the Doppler rows, so the
   most positive velocity is drawn at the top beside the +max label. SensDSv2's
   figure (and the sensds-web copy) draws toward-the-radar at the top, against
