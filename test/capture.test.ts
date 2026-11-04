@@ -15,7 +15,7 @@ test('Recorder keeps only frames inside the capture window and counts drops and 
   const rec = new radar.capture.Recorder(() => drops);
   rec.push(frame(9));                       // before start: ignored
   const done = rec.start(0.3, 0.1);
-  rec.push(frame(1)); rec.push(frame(2));
+  rec.push(frame(1), 1000, { index: 1, counter: 10, timestamp: null }); rec.push(frame(2), 1100, { index: 2, counter: 58, timestamp: null });
   drops = 6; rec.noteRestart();
   vi.advanceTimersByTime(300);
   const r = await done;
@@ -27,10 +27,12 @@ test('Recorder keeps only frames inside the capture window and counts drops and 
   assert.equal(r.dropped, 1);
   assert.equal(r.restarts, 1);
   assert.equal(r.frameTimesMs.length, 2);
+  assert.deepEqual(r.arrivalMs, [1000, 1100]);
+  assert.deepEqual(r.frameMeta.map(m => m?.counter), [10, 58]);
 });
 
 test('sidecar carries label, distance, frame counts, config, board, device and build', async () => {
-  const capture = { frames: [frame(0), frame(0)], frameTimesMs: [0, 100], startedAt: new Date('2026-10-21T15:00:00Z'), endedAt: new Date('2026-10-21T15:00:03Z'), durationS: 3, expected: 30, dropped: 0, restarts: 0 };
+  const capture = { frames: [frame(0), frame(0)], frameTimesMs: [0, 100], arrivalMs: [5000, 5100], startMs: 5000, frameMeta: [{ index: 1, counter: 7, timestamp: null }, null], startedAt: new Date('2026-10-21T15:00:00Z'), endedAt: new Date('2026-10-21T15:00:03Z'), durationS: 3, expected: 30, dropped: 0, restarts: 0 };
   const device = await radar.capture.deviceInfo('test bench');
   const s = radar.capture.sidecar({
     type: 'dataset', file: 'push_0.6m_x.npy', capture, config, shape: [3, 128, 256], device,
@@ -45,6 +47,9 @@ test('sidecar carries label, distance, frame counts, config, board, device and b
   assert.equal(s.device.name, 'test bench');
   assert.match(s.radar_js.commit, /^[0-9a-f]{12}$/);
   assert.equal(s.started_at, '2026-10-21T15:00:00.000Z');
+  assert.deepEqual(s.arrival_ms, [5000, 5100]);
+  assert.deepEqual(s.frame_counter, [7, null]);
+  assert.deepEqual(s.frame_index, [1, null]);
 });
 
 test('captureName: label, distance and local time', () => {

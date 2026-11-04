@@ -18,6 +18,13 @@ export interface Sidecar {
   duration_s: number;
   frames: { expected: number; received: number; dropped: number; restarts: number; shape: number[] };
   frame_times_ms: number[];
+  /** performance.now() at each frame's arrival in the onFrame callback, and at the start (ms). */
+  arrival_ms: number[];
+  start_performance_now_ms: number;
+  /** Device metadata per frame (null where the source gave none): see radar.FrameMeta. */
+  frame_index: (number | null)[];
+  frame_counter: (number | null)[];
+  firmware_timestamp: (number | null)[];
   config: RadarConfig;
   board: { board: string; firmware: string; chip: string } | null;
   device: DeviceInfo;
@@ -47,6 +54,11 @@ export function sidecar(input: SidecarInput): Sidecar {
     started_at: c.startedAt.toISOString(), ended_at: c.endedAt.toISOString(), duration_s: c.durationS,
     frames: { expected: c.expected, received: c.frames.length, dropped: c.dropped, restarts: c.restarts, shape: [c.frames.length, ...input.shape] },
     frame_times_ms: c.frameTimesMs,
+    arrival_ms: c.arrivalMs,
+    start_performance_now_ms: c.startMs,
+    frame_index: c.frameMeta.map(m => m?.index ?? null),
+    frame_counter: c.frameMeta.map(m => m?.counter ?? null),
+    firmware_timestamp: c.frameMeta.map(m => m?.timestamp ?? null),
     config: input.config,
     board: input.board ? { board: input.board.board, firmware: input.board.firmware, chip: input.board.chip.isBGT60TR13C ? 'BGT60TR13C' : 'unknown' } : null,
     device: input.device,

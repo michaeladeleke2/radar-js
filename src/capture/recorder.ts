@@ -4,6 +4,12 @@ export interface CaptureResult {
   frames: Float32Array[];
   /** Arrival time of each frame, ms after the capture started. */
   frameTimesMs: number[];
+  /** Arrival time of each frame as performance.now() read when the frame was handed in (ms). */
+  arrivalMs: number[];
+  /** performance.now() when the capture started (ms). */
+  startMs: number;
+  /** Device metadata per frame, when the source gives it (radar.onFrame's second argument). */
+  frameMeta: ({ index: number; counter: number | null; timestamp: number | null } | null)[];
   startedAt: Date;
   endedAt: Date;
   durationS: number;
@@ -26,6 +32,7 @@ export interface CaptureResult {
 export class Recorder {
   private frames: Float32Array[] = [];
   private times: number[] = [];
+  private meta: ({ index: number; counter: number | null; timestamp: number | null } | null)[] = [];
   private t0 = 0;
   private active = false;
   private dropsAtStart = 0;
@@ -39,11 +46,16 @@ export class Recorder {
 
   get recording(): boolean { return this.active; }
 
-  /** Hand every streamed frame in; ignored unless a capture is running. */
-  push(frame: Float32Array, now = performance.now()): void {
+  /**
+   * Hand every streamed frame in; ignored unless a capture is running.
+   * @param now performance.now() at arrival (read it in the onFrame callback)
+   * @param meta the frame's device metadata (radar.onFrame's second argument)
+   */
+  push(frame: Float32Array, now = performance.now(), meta: { index: number; counter: number | null; timestamp: number | null } | null = null): void {
     if (!this.active) return;
     this.frames.push(frame);
-    this.times.push(now - this.t0);
+    this.times.push(now);
+    this.meta.push(meta);
     this.onProgress?.(this.frames.length, (now - this.t0) / 1000);
   }
 
@@ -56,7 +68,7 @@ export class Recorder {
    */
   start(durationS: number, frameTimeS: number): Promise<CaptureResult> {
     if (this.active) return Promise.reject(new Error('A capture is already running'));
-    this.frames = []; this.times = []; this.restarts = 0;
+    this.frames = []; this.times = []; this.meta = []; this.restarts = 0;
     this.dropsAtStart = this.dropCounter();
     this.t0 = performance.now();
     const startedAt = new Date();
@@ -65,7 +77,8 @@ export class Recorder {
       setTimeout(() => {
         this.active = false;
         resolve({
-          frames: this.frames, frameTimesMs: this.times.map(t => +t.toFixed(2)), startedAt, endedAt: new Date(), durationS,
+          frames: this.frames, frameTimesMs: this.times.map(t => +(t - this.t0).toFixed(3)), arrivalMs: this.times.map(t => +t.toFixed(3)),
+          startMs: +this.t0.toFixed(3), frameMeta: this.meta, startedAt, endedAt: new Date(), durationS,
           expected: Math.round(durationS / frameTimeS),
           dropped: this.dropCounter() - this.dropsAtStart, restarts: this.restarts,
         });

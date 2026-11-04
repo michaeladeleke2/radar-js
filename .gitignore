@@ -8,3 +8,5 @@ dist-lib/
 .claude/
 # Raw captures stay out of git (about 12 MB per 3 s clip); see data/README.md
 data/captures/
+# Live verification captures (about 236 MB per 60 s; the set is about 1 GB); see docs/verification-summary.md
+test/captures/

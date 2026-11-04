@@ -15,12 +15,13 @@ import radar from '../src/index';
 import type { Recording } from '../src/data/index';
 import type { RadarConfig } from '../src/config/types';
 import type { Sink } from '../src/capture/index';
+import type { FrameMeta } from '../src/index';
 
 const ANTENNA = 0;
 const HISTORY_FRAMES = 50;                      // max(10, round(5 s * 10 fps))
 const JET_VMIN = -50.0;                         // REF_JET_VMIN
 const REDRAW_MS = 200;
-const MAX_RECORD_FRAMES = 600;                  // 60 s at 10 frames per second
+const MAX_RECORD_FRAMES = 1200;                 // 120 s at 10 frames per second (Simulate's Record)
 const CONFIG: RadarConfig = radar.config.SENSDS_CONFIG;
 const FRAME_MS = CONFIG.frame_repetition_time_s * 1000;
 
@@ -74,7 +75,7 @@ const setRunning = (on: boolean) => $('dot').classList.toggle('on', on);
 let mode: Mode = 'live';
 function setMode(next: Mode) {
   if (next === mode) return;
-  if (benchRun || datasetBusy) return;          // finish the benchmark or clip first
+  if (benchRun || datasetBusy || liveRecording) return;   // finish the benchmark, clip or recording first
   stopFile();
   stopSim();
   if (radar.isStreaming() && !(usesBoard(mode) && usesBoard(next))) radar.stop();
@@ -87,7 +88,8 @@ function setMode(next: Mode) {
   $('panel-file').hidden = mode !== 'file';
   $('panel-sim').hidden = mode !== 'sim';
   $('liveHint').hidden = !usesBoard(mode);
-  button('recBtn').hidden = mode === 'dataset';
+  button('recBtn').hidden = mode !== 'sim';
+  $('panel-liverec').hidden = mode !== 'live';
   shape = { nChirp: CONFIG.num_chirps, nSample: CONFIG.num_samples, nRx: 3 };
   resetView(mode === 'sim' ? 'Doppler Spectrogram (simulated)' : mode === 'file' ? 'Doppler Spectrogram (file)' : 'Doppler Spectrogram (live)');
   status(usesBoard(mode) ? (radar.isStreaming() ? 'Radar streaming.' : radar.isConnected() ? 'Connected. Press Start.' : 'Not connected.') : mode === 'file' ? 'Load a recording to play it.' : 'Press Start to simulate.');
@@ -110,6 +112,8 @@ function renderLive() {
   if (usesBoard(mode)) { setRunning(streaming); renderRecord(streaming); }
   button('benchBtn').disabled = !streaming || Boolean(benchRun);
   button('dsRecordBtn').disabled = !streaming || datasetBusy;
+  button('liveRecBtn').disabled = !streaming || liveRecording;
+  button('liveRecBtn').textContent = liveRecording ? 'Recording…' : 'Record';
 }
 
 radar.onState(({ message, restarted }: { message?: string; restarted?: boolean }) => {
@@ -140,11 +144,12 @@ button('stopBtn').onclick = async () => {
   await radar.stop();
   renderLive();
 };
-radar.onFrame((cube: Float32Array) => {
+radar.onFrame((cube: Float32Array, meta: FrameMeta) => {
   if (!usesBoard(mode)) return;
-  const t = performance.now();
-  clipRecorder.push(cube, t);
-  benchRecorder.push(cube, t);
+  const t = performance.now();                 // arrival time, read first thing in the callback
+  liveRecorder.push(cube, t, meta);
+  clipRecorder.push(cube, t, meta);
+  benchRecorder.push(cube, t, meta);
   if (benchRun) benchFrame(cube, t);
   else feed(cube, true);
   $('drops').textContent = String(radar.stats().drops);
@@ -291,6 +296,7 @@ button('recBtn').onclick = () => {
 };
 
 // ---------- shared by Dataset and Live benchmark ----------
+const liveRecorder = new radar.capture.Recorder(() => radar.stats().drops);
 const clipRecorder = new radar.capture.Recorder(() => radar.stats().drops);
 const benchRecorder = new radar.capture.Recorder(() => radar.stats().drops);
 let sink: Sink = radar.capture.downloadSink();
@@ -301,12 +307,59 @@ const overlay = (text: string | null) => { $('overlay').hidden = text === null; 
 const FRAME_SHAPE: [number, number, number] = [3, CONFIG.num_chirps, CONFIG.num_samples];
 
 function showSink() {
-  $('folderInfo').textContent = sink.remove ? `Saving to the folder "${sink.name}".` : 'Files download to your Downloads folder until you choose a folder.';
+  const text = sink.remove ? `Saving to the folder "${sink.name}".` : 'Files download to your Downloads folder until you choose a folder.';
+  $('folderInfo').textContent = text;
+  $('liveFolderInfo').textContent = text;
 }
-if (!radar.capture.canChooseFolder()) button('folderBtn').hidden = true;
+if (!radar.capture.canChooseFolder()) { button('folderBtn').hidden = true; button('liveFolderBtn').hidden = true; }
 radar.capture.restoreFolder().then(s => { if (s) { sink = s; showSink(); loadCounts(); } });
-button('folderBtn').onclick = async () => {
+const pickFolder = async () => {
   try { sink = await radar.capture.chooseFolder(); showSink(); await loadCounts(); } catch { /* picker closed */ }
+};
+button('folderBtn').onclick = pickFolder;
+button('liveFolderBtn').onclick = pickFolder;
+
+// ---------- Live recording (timed): <name>.npy + <name>.timing.json ----------
+let liveRecording = false;
+const CONFIG_NAME = 'SENSDS_CONFIG (SensDSv2 core/radar.py build_config)';
+button('liveRecBtn').onclick = async () => {
+  if (!radar.isStreaming() || liveRecording) return;
+  const name = ($('recName') as HTMLInputElement).value.trim();
+  const seconds = Number(($('recSeconds') as HTMLInputElement).value);
+  const connection = ($('recConnection') as HTMLSelectElement).value;
+  const conditions = ($('recConditions') as HTMLTextAreaElement).value.trim();
+  const problem = !/^[A-Za-z0-9_.-]+$/.test(name) ? 'Name: letters, digits, _ . - only.'
+    : !(seconds >= 1 && seconds <= 120) ? 'Duration: 1 to 120 s.'
+    : !deviceName() ? 'Enter a machine label first.'
+    : !connection ? 'Choose the connection (direct USB or USB hub).' : '';
+  if (problem) { $('liveRecInfo').textContent = problem; return; }
+  if (await sink.exists?.(`${name}.npy`) && !confirm(`${name}.npy is already in "${sink.name}". Replace it?`)) return;
+  liveRecording = true; renderLive();
+  liveRecorder.onProgress = (n, t) => { $('liveRecInfo').textContent = `Recording ${name}: ${t.toFixed(1)} of ${seconds} s, ${n} frames`; };
+  try {
+    const result = await liveRecorder.start(seconds, CONFIG.frame_repetition_time_s);
+    liveRecorder.onProgress = null;
+    $('liveRecInfo').textContent = `Saving ${result.frames.length} frames…`;
+    const device = await radar.capture.deviceInfo(deviceName());
+    const meta = radar.capture.sidecar({ type: 'recording', file: `${name}.npy`, capture: result, config: CONFIG, shape: FRAME_SHAPE, board: radar.boardInfo(), device });
+    Object.assign(meta, {
+      name, machine_label: deviceName(), conditions, connection_type: connection,
+      browser: `${device.browser} ${device.browserVersion}`.trim(), os: `${device.os} ${device.osVersion}`.trim(),
+      config_name: CONFIG_NAME, chirp_time_s: CONFIG.chirp_repetition_time_s, frame_time_s: CONFIG.frame_repetition_time_s,
+      start_time: meta.started_at,
+    });
+    const rec = radar.data.fromFrames(result.frames, FRAME_SHAPE);
+    await sink.write(`${name}.npy`, radar.data.saveNpy(rec));
+    await sink.write(`${name}.timing.json`, new Blob([JSON.stringify(meta, null, 1)], { type: 'application/json' }));
+    const ok = Math.abs(result.frames.length - result.expected) <= 2 && result.dropped === 0 && result.restarts === 0;
+    $('liveRecInfo').textContent = `${ok ? 'Saved' : 'Saved, check it:'} ${name}.npy and ${name}.timing.json — ${result.frames.length} of ${result.expected} frames, ${result.dropped} dropped, ${result.restarts} restarts`;
+    status(`Saved ${name} (${result.frames.length} frames).`);
+  } catch (err) {
+    $('liveRecInfo').textContent = `Not saved: ${(err as Error).message}`;
+  } finally {
+    liveRecorder.onProgress = null;
+    liveRecording = false; renderLive();
+  }
 };
 
 // ---------- Dataset ----------
@@ -495,5 +548,6 @@ button('benchBtn').onclick = async () => {
   renderLive();
 };
 
+button('recBtn').hidden = true;               // the page opens in Live mode: Simulate's Record stays hidden
 resetView('Doppler Spectrogram (live)');
 renderLive();

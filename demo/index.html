@@ -79,7 +79,7 @@
   #fileInfo { font-size: 12px; color: var(--subtext); overflow-wrap: anywhere; }
 
   .field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--subtext); flex: 1; min-width: 0; }
-  .field input, .field select { font: inherit; font-size: 13px; color: var(--text); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 6px 8px; width: 100%; }
+  .field input, .field select, .field textarea { font: inherit; font-size: 13px; color: var(--text); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 6px 8px; width: 100%; }
   .result { font-family: var(--mono); font-size: 11.5px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; white-space: pre-wrap; }
   table.counts { border-collapse: collapse; font-size: 12px; width: 100%; }
   table.counts th, table.counts td { border-bottom: 1px solid var(--divider); padding: 3px 4px; text-align: right; }
@@ -124,7 +124,21 @@
         <button id="startBtn" disabled>Start</button>
         <button id="stopBtn" disabled>Stop</button>
       </div>
-      <label class="field">Device name <input id="deviceName" type="text" placeholder="e.g. MacBook Air M2, lab desk" autocomplete="off"></label>
+      <label class="field">Machine label <input id="deviceName" type="text" placeholder="e.g. MacBook Pro M4, lab desk" autocomplete="off"></label>
+    </div>
+
+    <div id="panel-liverec" class="panel">
+      <div class="label">Recording</div>
+      <div class="row"><button id="liveFolderBtn">Choose folder…</button></div>
+      <div id="liveFolderInfo" class="hint">Files download to your Downloads folder until you choose a folder.</div>
+      <div class="row">
+        <label class="field">Name <input id="recName" type="text" value="test_recording" autocomplete="off" spellcheck="false"></label>
+        <label class="field">Duration (s) <input id="recSeconds" type="number" min="1" max="120" step="1" value="20"></label>
+      </div>
+      <label class="field">Connection <select id="recConnection"><option value="">(choose)</option><option value="direct USB">Direct USB</option><option value="USB hub">USB hub</option></select></label>
+      <label class="field">Conditions <textarea id="recConditions" rows="3" placeholder="Activity, distances, speed, board height"></textarea></label>
+      <button id="liveRecBtn" class="primary" disabled title="Records the live stream for the duration and saves <name>.npy and <name>.timing.json">Record</button>
+      <div id="liveRecInfo" class="hint"></div>
     </div>
 
     <div id="panel-bench" class="panel">
@@ -179,7 +193,7 @@
     </div>
 
     <hr>
-    <button id="recBtn" class="rec" aria-pressed="false" disabled title="Save the live or simulated stream as .npy (up to 60 s)">Record</button>
+    <button id="recBtn" class="rec" aria-pressed="false" disabled title="Save the simulated stream as .npy (up to 120 s)">Record</button>
     <div id="status"><span id="dot" class="dot"></span><span id="statusText">Not connected.</span></div>
     <dl>
       <dt>Frames</dt><dd id="frames">0</dd>

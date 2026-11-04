@@ -8,6 +8,8 @@ export interface Sink {
   name: string;
   write(file: string, blob: Blob): Promise<void>;
   remove?(file: string): Promise<void>;
+  /** True when the file is already there (folders only). */
+  exists?(file: string): Promise<boolean>;
   /** Sidecars already in the folder (for running counts), when it can list. */
   sidecars?(): Promise<Sidecar[]>;
 }
@@ -32,6 +34,7 @@ export function folderSink(dir: DirHandle): Sink {
       await w.close();
     },
     async remove(file) { await dir.removeEntry(file); },
+    async exists(file) { try { await dir.getFileHandle(file); return true; } catch { return false; } },
     async sidecars() {
       const out: Sidecar[] = [];
       for await (const e of dir.values()) {
