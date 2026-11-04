@@ -10,6 +10,8 @@ Step 1 checks (numpy only, independent of radar-js's own loader):
   - the frame count matches duration x frame rate within 2 frames; the
     duration comes from --duration, else from the sidecar
   - repeated frames: consecutive frames that are byte-identical
+  - clipping per antenna: share of samples at ADC code 0 and at 4095, and the
+    antenna's mean code; FAIL above 0.1% at either end
   - frame alignment: in every chirp the largest sample-to-sample jump is the
     chirp boundary; on the channel where it stands out most it must fall after
     sample 255. A frame that starts mid-stream (a lost slice; 2026-11-04) puts
@@ -66,6 +68,14 @@ def main():
     ok &= report(finite, f"no NaN or Inf ({int(np.isnan(data).sum())} NaN, {int(np.isinf(data).sum())} Inf)")
     lo, hi = float(np.nanmin(data)), float(np.nanmax(data))
     ok &= report(lo >= -1.0 and hi <= 1.0, f"values within -1..1 (min {lo:.6f}, max {hi:.6f})")
+
+    # Clipping per antenna, in ADC codes (the SDK scale is raw * 2 / 4095 - 1)
+    CLIP_LIMIT = 0.1   # percent
+    for rx in range(data.shape[1]):
+        raw = np.rint((np.asarray(data[:, rx], dtype=np.float64) + 1.0) * 4095.0 / 2.0)
+        lo, hi = 100.0 * float((raw <= 0).mean()), 100.0 * float((raw >= 4095).mean())
+        ok &= report(lo <= CLIP_LIMIT and hi <= CLIP_LIMIT,
+                     f"rx{rx} clipping: {lo:.3f}% at code 0, {hi:.3f}% at 4095 (limit {CLIP_LIMIT}%); mean code {raw.mean():.1f}, min {int(raw.min())}, max {int(raw.max())}")
 
     n = data.shape[0]
     if duration is None:

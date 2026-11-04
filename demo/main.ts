@@ -331,6 +331,50 @@ const pickFolder = async () => {
 button('folderBtn').onclick = pickFolder;
 button('liveFolderBtn').onclick = pickFolder;
 
+// ---------- Session log: when each loss happened (idle, recording, saving) ----------
+type Phase = 'idle' | 'recording' | 'saving';
+let phase: Phase = 'idle';
+const sessionLog = { started_ms: performance.now(), events: [] as Record<string, unknown>[], saves: [] as Record<string, unknown>[] };
+let lastDiag: Record<string, number> | null = null, lastDrops = 0, lastFrames = 0;
+function pollLoss() {
+  const st = radar.stats();
+  const d = st.diagnostics as Record<string, number> | null;
+  if (!d) { lastDiag = null; return; }
+  // Start resets the session's frame and drop counts (the device's loss
+  // counters keep counting): take a new baseline for the drops then.
+  if (st.frames < lastFrames) lastDrops = 0;
+  lastFrames = st.frames;
+  if (lastDiag) {
+    const changes: Record<string, number> = {};
+    for (const k of Object.keys(d)) if (d[k] !== lastDiag[k]) changes[k] = d[k] - lastDiag[k];
+    if (st.drops !== lastDrops) changes.drops = st.drops - lastDrops;
+    if (Object.keys(changes).length) sessionLog.events.push({ t_ms: +performance.now().toFixed(1), frame: st.frames, phase, ...changes });
+  }
+  lastDiag = { ...d }; lastDrops = st.drops;
+}
+setInterval(pollLoss, 100);
+const eventsBetween = (t0: number, t1: number) => sessionLog.events.filter(e => (e.t_ms as number) >= t0 && (e.t_ms as number) <= t1);
+const tally = (evs: Record<string, unknown>[]) => {
+  const out: Record<string, number> = { packet_gap: 0, packets_lost: 0, crc_error: 0, sync_lost: 0, queue_trimmed: 0, drops: 0 };
+  for (const e of evs) for (const k of Object.keys(out)) out[k] += (e[k] as number) ?? 0;
+  return out;
+};
+button('sessionLogBtn').onclick = async () => {
+  pollLoss();
+  const name = ($('recName') as HTMLInputElement).value.trim() || 'session';
+  const st = radar.stats();
+  const body = {
+    format: 'radar-js-session-log', version: 1, radar_js: radar.capture.BUILD, written_at: new Date().toISOString(),
+    connection_type: ($('recConnection') as HTMLSelectElement).value, machine_label: deviceName(),
+    session: { frames_since_start: st.frames, drops_since_start: st.drops, restarts_since_start: st.restarts, loss_diagnostics: st.diagnostics },
+    totals_by_phase: { idle: tally(sessionLog.events.filter(e => e.phase === 'idle')), recording: tally(sessionLog.events.filter(e => e.phase === 'recording')), saving: tally(sessionLog.events.filter(e => e.phase === 'saving')) },
+    saves: sessionLog.saves, events: sessionLog.events,
+    long_tasks: longTasks.map(x => ({ t_ms: +x.t.toFixed(1), ms: +x.ms.toFixed(1) })),
+  };
+  await sink.write(`${name}.session.json`, new Blob([JSON.stringify(body, null, 1)], { type: 'application/json' }));
+  $('liveRecInfo').textContent = `Saved ${name}.session.json (${sessionLog.events.length} loss events).`;
+};
+
 // ---------- Live recording (timed): <name>.npy + <name>.timing.json ----------
 let liveRecording = false;
 const CONFIG_NAME = 'SENSDS_CONFIG (SensDSv2 core/radar.py build_config)';
@@ -347,11 +391,17 @@ button('liveRecBtn').onclick = async () => {
   if (problem) { $('liveRecInfo').textContent = problem; return; }
   if (await sink.exists?.(`${name}.npy`) && !confirm(`${name}.npy is already in "${sink.name}". Replace it?`)) return;
   liveRecording = true; renderLive();
+  pollLoss(); phase = 'recording';
   const sessionAtStart = radar.stats();          // frames and drops since Start, when this recording began
   liveRecorder.onProgress = (n, t) => { $('liveRecInfo').textContent = `Recording ${name}: ${t.toFixed(1)} of ${seconds} s, ${n} frames`; };
   try {
     const result = await liveRecorder.start(seconds, CONFIG.frame_repetition_time_s);
     liveRecorder.onProgress = null;
+    pollLoss(); phase = 'saving';
+    const recEnd = performance.now();
+    const stopForSave = ($('stopWhileSaving') as HTMLInputElement).checked && radar.isStreaming();
+    if (stopForSave) await radar.stop();
+    const saveStart = performance.now();
     $('liveRecInfo').textContent = `Saving ${result.frames.length} frames…`;
     const device = await radar.capture.deviceInfo(deviceName());
     const meta = radar.capture.sidecar({ type: 'recording', file: `${name}.npy`, capture: result, config: CONFIG, shape: FRAME_SHAPE, board: radar.boardInfo(), device });
@@ -374,9 +424,17 @@ button('liveRecBtn').onclick = async () => {
         };
       })(),
     });
+    meta.loss_during_recording = tally(eventsBetween(result.startMs, recEnd));
+    meta.radar_stopped_while_saving = stopForSave;
     const rec = radar.data.fromFrames(result.frames, FRAME_SHAPE);
     await sink.write(`${name}.npy`, radar.data.saveNpy(rec));
     await sink.write(`${name}.timing.json`, new Blob([JSON.stringify(meta, null, 1)], { type: 'application/json' }));
+    const saveEnd = performance.now();
+    pollLoss();
+    sessionLog.saves.push({ name, start_ms: +saveStart.toFixed(1), end_ms: +saveEnd.toFixed(1), duration_ms: +(saveEnd - saveStart).toFixed(1), radar_stopped: stopForSave,
+      long_tasks_during: longTasks.filter(x => x.t >= saveStart && x.t <= saveEnd).length, loss_during: tally(eventsBetween(saveStart, saveEnd)) });
+    phase = 'idle';
+    if (stopForSave) { await radar.start(); }
     const ok = Math.abs(result.frames.length - result.expected) <= 2 && result.dropped === 0 && result.restarts === 0;
     $('liveRecInfo').textContent = `${ok ? 'Saved' : 'Saved, check it:'} ${name}.npy and ${name}.timing.json — ${result.frames.length} of ${result.expected} frames, ${result.dropped} dropped, ${result.restarts} restarts`;
     status(`Saved ${name} (${result.frames.length} frames).`);
@@ -384,6 +442,7 @@ button('liveRecBtn').onclick = async () => {
     $('liveRecInfo').textContent = `Not saved: ${(err as Error).message}`;
   } finally {
     liveRecorder.onProgress = null;
+    phase = 'idle';
     liveRecording = false; renderLive();
   }
 };

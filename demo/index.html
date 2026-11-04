@@ -135,11 +135,13 @@
         <label class="field">Name <input id="recName" type="text" value="test_recording" autocomplete="off" spellcheck="false"></label>
         <label class="field">Duration (s) <input id="recSeconds" type="number" min="1" max="120" step="1" value="20"></label>
       </div>
-      <label class="field">Connection <select id="recConnection"><option value="">(choose)</option><option value="direct USB">Direct USB</option><option value="USB hub">USB hub</option></select></label>
+      <label class="field">Connection <select id="recConnection"><option value="">(choose)</option><option value="direct USB">Direct USB</option><option value="USB hub">USB hub (other devices on it)</option><option value="USB hub, no other devices">USB hub, no other devices</option></select></label>
       <label class="field">Conditions <textarea id="recConditions" rows="3" placeholder="Activity, distances, speed, board height"></textarea></label>
       <label class="check"><input id="pausePlot" type="checkbox"> Pause plot (no drawing or processing while streaming)</label>
+      <label class="check"><input id="stopWhileSaving" type="checkbox"> Stop the radar while saving, then start it again</label>
       <button id="liveRecBtn" class="primary" disabled title="Records the live stream for the duration and saves <name>.npy and <name>.timing.json">Record</button>
       <div id="liveRecInfo" class="hint"></div>
+      <button id="sessionLogBtn" title="Saves <name>.session.json: every loss event of this live session with its time and phase (idle, recording, saving), the saves and long tasks">Save session log</button>
     </div>
 
     <div id="panel-bench" class="panel">
