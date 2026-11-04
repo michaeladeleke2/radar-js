@@ -98,6 +98,14 @@ Keep this list current when a copied file has to change.
   state event.
 - `src/dsp/range_map.js`: `rangeSpectrum` is exported (one word), for
   `radar.dsp.rangeFft`.
+- `src/device/strata.js`, `device.js`, `session.js`: per-frame device
+  metadata. `SliceAssembler` passes the packet counter of each slice's first
+  packet with the slice (it already parsed the firmware timestamp);
+  `RawFrameReader` keeps the counter and timestamp of the slice holding each
+  frame's first byte (`lastMeta`); `RadarDevice.nextFrame` copies it to
+  `lastFrameMeta`; the session hands `{ index, counter, timestamp }` to
+  `onFrame` subscribers as a second argument. Frame data and timing are
+  unchanged. Tested in `test/frame_meta.test.ts`.
 - `src/viz/image.js`: `historyToPlotData` reverses the Doppler rows, so the
   most positive velocity is drawn at the top beside the +max label. SensDSv2's
   figure (and the sensds-web copy) draws toward-the-radar at the top, against

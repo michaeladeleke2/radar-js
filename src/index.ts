@@ -28,8 +28,16 @@ import { simulate } from './simulate/index.ts';
 import { capture } from './capture/index.ts';
 import { bench } from './bench/index.ts';
 
-/** Frame callback: one radar frame, Float32Array laid out [rx][chirp][sample] (3 x 128 x 256). */
-export type FrameCallback = (cube: Float32Array) => void;
+/**
+ * Device metadata of a frame: `index` (1-based count since start), `counter`
+ * (16-bit Strata packet counter of the frame's first data packet; it steps by
+ * the same amount every frame, so a different step means lost packets),
+ * `timestamp` (the firmware's slice timestamp, null when it sends none).
+ */
+export interface FrameMeta { index: number; counter: number | null; timestamp: number | null }
+
+/** Frame callback: one radar frame, Float32Array laid out [rx][chirp][sample] (3 x 128 x 256), and its device metadata. */
+export type FrameCallback = (cube: Float32Array, meta: FrameMeta) => void;
 
 export interface BoardInfo {
   /** Board name the firmware reports, e.g. "Radar Baseboard MCU7". */
@@ -65,7 +73,7 @@ export const radar = {
 
   /**
    * Receive every raw frame (Float32Array, 3 x 128 x 256, the same values as
-   * the SDK's get_next_frame()[0] in Python).
+   * the SDK's get_next_frame()[0] in Python) with its FrameMeta.
    * @returns a function that unsubscribes
    */
   onFrame: (callback: FrameCallback): (() => boolean) => subscribeFrames(callback),

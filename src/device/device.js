@@ -118,6 +118,7 @@ export class RadarDevice {
   // same layout and values as Python's get_next_frame()[0].
   async nextFrame() {
     const bytes = await this.reader.next(FRAME_TIMEOUT_MS);
+    this.lastFrameMeta = this.reader.lastMeta;   // radar-js: packet counter and timestamp of this frame
     const { numRx, numChirps, samplesPerChirp } = this.acq;
     return frameBytesToCube(bytes, numRx, numChirps, samplesPerChirp);
   }

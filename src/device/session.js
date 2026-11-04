@@ -22,8 +22,11 @@ export const boardInfo = () => session.info;
 export const radarStats = () => ({ frames: session.frames, drops: session.drops });
 export const hasWebSerial = () => 'serial' in navigator;
 
-// fn(cube): cube is a Float32Array (3 x 128 x 256), the same as Python's
-// get_next_frame()[0]. A new array every frame.
+// fn(cube, meta): cube is a Float32Array (3 x 128 x 256), the same as Python's
+// get_next_frame()[0], a new array every frame. meta (radar-js addition):
+// { index (1-based frame count since start), counter (16-bit packet counter of
+// the frame's first data packet), timestamp (firmware slice timestamp, or null
+// when the firmware sends none) }.
 export function subscribeFrames(fn) { subscribers.add(fn); return () => subscribers.delete(fn); }
 
 // fn({ connected, streaming, message, restarted })
@@ -84,7 +87,10 @@ async function loop(gen) {
       if (!live()) break;
       session.frames++;
       if (++session.goodSinceRestart >= 50) session.restarts = 0;   // streaming fine again
-      for (const fn of subscribers) fn(cube);
+      // radar-js: frame metadata from the device (see device.js lastFrameMeta)
+      const m = session.device.lastFrameMeta ?? {};
+      const meta = { index: session.frames, counter: m.counter ?? null, timestamp: m.timestamp ? Number(m.timestamp) : null };
+      for (const fn of subscribers) fn(cube, meta);
     } catch (e) {
       if (!live()) break;
       // Dropped frames are skipped and streaming continues, as in SensDSv2.

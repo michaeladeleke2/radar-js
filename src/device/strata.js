@@ -112,6 +112,7 @@ export class SliceAssembler {
     if (type & DATA_FRAME_FLAG_FIRST) {
       this.virtualChannel = channel;
       this.pos = 0;   // a new frame starts; any incomplete previous frame is dropped
+      this.sliceCounter = counter;   // radar-js: packet counter of the slice's first packet
     }
 
     // The SDK reads the payload into the buffer before checking the CRC.
@@ -151,7 +152,7 @@ export class SliceAssembler {
         const data = this.buf.slice(0, this.pos);
         this.buf = null;
         this.pos = 0;
-        this.onSlice({ data, channel: this.virtualChannel, timestamp });
+        this.onSlice({ data, channel: this.virtualChannel, timestamp, counter: this.sliceCounter });
       }
     }
   }
@@ -196,7 +197,7 @@ export class RawFrameReader {
     this.trimmed = 0;         // slices dropped by queue trimming (for diagnostics)
   }
 
-  pushSlice(slice) { this._enqueue({ data: slice.data }); }
+  pushSlice(slice) { this._enqueue({ data: slice.data, counter: slice.counter, timestamp: slice.timestamp }); }
   pushError(err) { this._enqueue({ code: err.code }); }
 
   _enqueue(item) {
@@ -251,9 +252,12 @@ export class RawFrameReader {
               throw new Error('Radar data error 0x' + s.code.toString(16));
           }
         }
-        this.slice = { data: s.data, offset: 0 };
+        this.slice = { data: s.data, offset: 0, counter: s.counter, timestamp: s.timestamp };
       }
 
+      // radar-js: the slice holding the frame's first byte describes the frame
+      // (packet counter of that slice's first packet, firmware timestamp)
+      if (pos === 0) this.lastMeta = { counter: this.slice.counter ?? null, timestamp: this.slice.timestamp ?? 0n, sliceOffset: this.slice.offset };
       const avail = this.slice.data.length - this.slice.offset;
       if (remaining < avail) {
         // Frame finished; keep the rest of the slice for the next call.
