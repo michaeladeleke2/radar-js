@@ -12,14 +12,15 @@
 
 const subscribers = new Set();
 const stateListeners = new Set();
-const session = { port: null, device: null, running: false, drops: 0, frames: 0, mod: null, restarts: 0, goodSinceRestart: 0, gen: 0, info: null };
+const session = { port: null, device: null, running: false, drops: 0, frames: 0, mod: null, restarts: 0, goodSinceRestart: 0, gen: 0, info: null, restartsTotal: 0 };
 const MAX_RESTARTS = 3;          // in a row, before giving up
 
 export const isConnected = () => Boolean(session.device);
 export const isStreaming = () => session.running;
 // { firmware, chip, board } from the handshake, or null when not connected
 export const boardInfo = () => session.info;
-export const radarStats = () => ({ frames: session.frames, drops: session.drops });
+// radar-js: restarts since Start, and the device's loss diagnostics (why frames were dropped)
+export const radarStats = () => ({ frames: session.frames, drops: session.drops, restarts: session.restartsTotal, diagnostics: session.device?.diagnostics?.() ?? null });
 export const hasWebSerial = () => 'serial' in navigator;
 
 // fn(cube, meta): cube is a Float32Array (3 x 128 x 256), the same as Python's
@@ -64,7 +65,7 @@ export async function startRadar() {
     emit(true, `Could not start the radar: ${e.message}`);
     return false;
   }
-  Object.assign(session, { running: true, drops: 0, frames: 0, restarts: 0, goodSinceRestart: 0 });
+  Object.assign(session, { running: true, drops: 0, frames: 0, restarts: 0, goodSinceRestart: 0, restartsTotal: 0 });
   emit(true, 'Radar streaming: BGT60TR13C, 3 antennas, 10 frames per second.');
   loop(++session.gen);
   return true;
@@ -107,10 +108,13 @@ async function loop(gen) {
       // The desktop stops here; it reads the radar on its own thread, so it
       // rarely falls behind.
       const recoverable = dropped || e instanceof mod.FifoOverflow || e instanceof mod.FrameSizeNotSupported || /Timeout waiting for radar data/.test(e.message);
-      if (recoverable && session.restarts < MAX_RESTARTS) {
-        session.restarts++; session.goodSinceRestart = 0;
+      // A drop's restart does not count toward MAX_RESTARTS (drops can be frequent
+      // and the restart is routine); a restart that fails still escalates below.
+      if (recoverable && (dropped || session.restarts < MAX_RESTARTS)) {
+        if (!dropped) { session.restarts++; session.goodSinceRestart = 0; }
+        session.restartsTotal++;
         console.warn('[radar] restarting acquisition after:', e.message);
-        emit(true, `Radar restarted after: ${e.message} (${session.restarts}/${MAX_RESTARTS})`, true);
+        emit(true, dropped ? `Radar realigned after a dropped frame (${session.drops} so far)` : `Radar restarted after: ${e.message} (${session.restarts}/${MAX_RESTARTS})`, true);
         try { await session.device.restart(); continue; }
         catch (err) {
           // The board did not take the restart: reopen the port and start

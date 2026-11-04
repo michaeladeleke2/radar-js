@@ -137,6 +137,7 @@
       </div>
       <label class="field">Connection <select id="recConnection"><option value="">(choose)</option><option value="direct USB">Direct USB</option><option value="USB hub">USB hub</option></select></label>
       <label class="field">Conditions <textarea id="recConditions" rows="3" placeholder="Activity, distances, speed, board height"></textarea></label>
+      <label class="check"><input id="pausePlot" type="checkbox"> Pause plot (no drawing or processing while streaming)</label>
       <button id="liveRecBtn" class="primary" disabled title="Records the live stream for the duration and saves <name>.npy and <name>.timing.json">Record</button>
       <div id="liveRecInfo" class="hint"></div>
     </div>
@@ -199,6 +200,7 @@
       <dt>Frames</dt><dd id="frames">0</dd>
       <dt>Dropped</dt><dd id="drops">0</dd>
     </dl>
+    <div id="dropWhy" class="hint"></div>
     <hr>
     <p class="hint" id="liveHint">Plug in the Radar Baseboard MCU7 by USB, close any desktop app using it, then Connect and pick the Infineon port.</p>
   </section>

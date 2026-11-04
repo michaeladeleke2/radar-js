@@ -31,7 +31,12 @@ test('session: after a slice is lost mid-frame, every delivered frame is a whole
   await s.startRadar();
   const t0 = Date.now();
   while (got.length < 3 && Date.now() - t0 < 5000) await new Promise(r => setTimeout(r, 20));
+  const stats = s.radarStats();
   await s.disconnectRadar();
+  // the diagnostics name the cause: one packet skipped by the counter
+  assert.equal(stats.diagnostics.packet_gap, 1);
+  assert.equal(stats.diagnostics.packets_lost, 1);
+  assert.equal(stats.restarts, 1);
 
   got.forEach((c, i) => {
     const match = truth.findIndex(t => t.length === c.length && t.every((v, j) => v === c[j]));

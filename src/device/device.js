@@ -44,6 +44,14 @@ export class RadarDevice {
     this.acq = deriveAcquisition(SENSDS_CONFIG);
     this.link = null;
     this.started = false;
+    // radar-js: why data was lost, for diagnostics (counts since this device was made)
+    this.diag = { packet_gap: 0, packets_lost: 0, crc_error: 0, channel_mismatch: 0, pool_depleted: 0, size_exceeded: 0, firmware_error: 0, queue_trimmed: 0 };
+    this.trimmedBefore = 0;
+  }
+
+  // radar-js: loss counters, plus sync losses on the link and slices trimmed from the reader's queue
+  diagnostics() {
+    return { ...this.diag, queue_trimmed: this.trimmedBefore + (this.reader?.trimmed ?? 0), sync_lost: this.link?.syncLost ?? 0 };
   }
 
   // Open the port (921600, then 1000000 as the SDK tries) and identify the chip.
@@ -96,6 +104,7 @@ export class RadarDevice {
     // desktop reads on its own thread and never needs more; a web page can be
     // held up for longer (another app taking the CPU, a screen share), so the
     // queue and pool here hold the 10 s of whole frames the SDK intends.
+    this.trimmedBefore += this.reader?.trimmed ?? 0;   // radar-js: keep the count across restarts
     const slicesPerFrame = Math.ceil(frameBytes / sliceBytes);
     const queueSize = frameQueueSize(SENSDS_CONFIG.frame_repetition_time_s) * slicesPerFrame;
     this.pool = new FramePool(queueSize + 1);
@@ -103,7 +112,11 @@ export class RadarDevice {
     const assembler = new SliceAssembler(sliceBytes, {
       pool: this.pool,
       onSlice: s => this.reader.pushSlice(s),
-      onError: e => this.reader.pushError(e),
+      onError: e => {
+        if (e.reason && e.reason in this.diag) this.diag[e.reason]++;   // radar-js: diagnostics
+        if (e.reason === 'packet_gap') this.diag.packets_lost += e.lost;
+        this.reader.pushError(e);
+      },
     });
     this.link.onData = p => assembler.push(p);
 

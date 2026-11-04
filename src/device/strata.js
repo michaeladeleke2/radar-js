@@ -88,8 +88,9 @@ export class SliceAssembler {
       this.packetCounter = (counter + 1) & 0xFFFF;
     } else if (counter !== this.packetCounter) {
       // Packet loss
+      const lost = (counter - this.packetCounter) & 0xFFFF;   // radar-js: how many packets the counter skipped
       this.packetCounter = (counter + 1) & 0xFFFF;
-      this.onError({ code: DataError_FrameDropped, channel, timestamp: 0n });
+      this.onError({ code: DataError_FrameDropped, channel, timestamp: 0n, reason: 'packet_gap', lost });
       if (!(type & DATA_FRAME_FLAG_FIRST)) return;   // dumpRemainder; discard this follow-up packet
     } else {
       this.packetCounter = (this.packetCounter + 1) & 0xFFFF;
@@ -98,14 +99,14 @@ export class SliceAssembler {
     if (!this.buf) {
       // FramePool::dequeueFrame; with no free buffer the packet is dumped
       if (this.pool && !this.pool.acquire()) {
-        this.onError({ code: DataError_FramePoolDepleted, channel: VIRTUAL_CHANNEL_UNDEFINED, timestamp: 0n });
+        this.onError({ code: DataError_FramePoolDepleted, channel: VIRTUAL_CHANNEL_UNDEFINED, timestamp: 0n, reason: 'pool_depleted' });
         return;
       }
       this.buf = new Uint8Array(this.capacity);
       this.pos = 0;
     }
     if (wLength > this.capacity - this.pos) {
-      this.onError({ code: DataError_FrameSizeExceeded, channel, timestamp: 0n });
+      this.onError({ code: DataError_FrameSizeExceeded, channel, timestamp: 0n, reason: 'size_exceeded' });
       return;
     }
 
@@ -120,7 +121,7 @@ export class SliceAssembler {
 
     if (!crcOk) {
       this.pos = 0;
-      this.onError({ code: DataError_FrameDropped, channel, timestamp: 0n });
+      this.onError({ code: DataError_FrameDropped, channel, timestamp: 0n, reason: 'crc_error' });
       return;
     }
 
@@ -128,7 +129,7 @@ export class SliceAssembler {
       if (this.pos === 0) return;   // unexpected follow-up packet
       if (this.virtualChannel !== channel) {
         this.pos = 0;
-        this.onError({ code: DataError_FrameDropped, channel, timestamp: 0n });
+        this.onError({ code: DataError_FrameDropped, channel, timestamp: 0n, reason: 'channel_mismatch' });
         return;
       }
     }
@@ -144,7 +145,7 @@ export class SliceAssembler {
       if (type & DATA_FRAME_FLAG_ERROR) {
         const errorFrameLength = 4 + ((type & DATA_FRAME_FLAG_TIMESTAMP) ? TIMESTAMP_SIZE : 0);
         if (wLength === errorFrameLength) {
-          this.onError({ code: u32le(this.buf, this.pos - 4), channel, timestamp });
+          this.onError({ code: u32le(this.buf, this.pos - 4), channel, timestamp, reason: 'firmware_error' });
         }
         // otherwise the SDK logs it as a debug frame
         this.pos = 0;

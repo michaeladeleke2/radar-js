@@ -52,19 +52,28 @@ function resetView(title: string, config = CONFIG) {
 }
 
 // Every source calls this with one frame (rx x chirp x sample).
+const plotPaused = () => mode === 'live' && ($('pausePlot') as HTMLInputElement).checked;
 function feed(cube: Float32Array | Float64Array, recordable: boolean) {
   const per = shape.nChirp * shape.nSample;
-  proc.push(cube.subarray(ANTENNA * per, (ANTENNA + 1) * per));
+  if (!plotPaused()) proc.push(cube.subarray(ANTENNA * per, (ANTENNA + 1) * per));
   frameCount++;
   $('frames').textContent = String(frameCount);
   if (recordable && recording) record(cube);
 }
 
+// Main-thread load, for recording sidecars: each plot draw's duration, and
+// Chrome's long tasks (anything that held the main thread over 50 ms).
+const drawLog: { t: number; ms: number }[] = [];
+const longTasks: { t: number; ms: number }[] = [];
+try { new PerformanceObserver(list => { for (const e of list.getEntries()) longTasks.push({ t: e.startTime, ms: e.duration }); }).observe({ type: 'longtask' }); } catch { /* not supported */ }
 setInterval(() => {
-  if (!pending) return;
+  if (!pending || plotPaused()) return;
   const p = pending;
   pending = null;
+  const t = performance.now();
   plot.draw(p.history, p.count, p.dopplerBins);
+  drawLog.push({ t, ms: performance.now() - t });
+  if (drawLog.length > 5000) drawLog.splice(0, 1000);
 }, REDRAW_MS);
 new ResizeObserver(() => plot?.redraw()).observe(canvas);
 
@@ -152,7 +161,10 @@ radar.onFrame((cube: Float32Array, meta: FrameMeta) => {
   benchRecorder.push(cube, t, meta);
   if (benchRun) benchFrame(cube, t);
   else feed(cube, true);
-  $('drops').textContent = String(radar.stats().drops);
+  const st = radar.stats();
+  $('drops').textContent = String(st.drops);
+  const d = st.diagnostics;
+  $('dropWhy').textContent = d && (st.drops || d.sync_lost) ? `Why: packet gaps ${d.packet_gap} (${d.packets_lost} packets lost), CRC errors ${d.crc_error}, sync lost ${d.sync_lost}, queue trimmed ${d.queue_trimmed}, other ${d.channel_mismatch + d.pool_depleted + d.size_exceeded + d.firmware_error}; ${st.restarts} restarts` : '';
 });
 
 // ---------- File (offline) ----------
@@ -348,7 +360,19 @@ button('liveRecBtn').onclick = async () => {
       browser: `${device.browser} ${device.browserVersion}`.trim(), os: `${device.os} ${device.osVersion}`.trim(),
       config_name: CONFIG_NAME, chirp_time_s: CONFIG.chirp_repetition_time_s, frame_time_s: CONFIG.frame_repetition_time_s,
       start_time: meta.started_at,
-      session_at_start: { frames_since_start: sessionAtStart.frames, drops_since_start: sessionAtStart.drops },
+      session_at_start: { frames_since_start: sessionAtStart.frames, drops_since_start: sessionAtStart.drops, restarts_since_start: sessionAtStart.restarts, loss_diagnostics: sessionAtStart.diagnostics },
+      session_at_end: (() => { const e = radar.stats(); return { frames_since_start: e.frames, drops_since_start: e.drops, restarts_since_start: e.restarts, loss_diagnostics: e.diagnostics }; })(),
+      main_thread: (() => {
+        const t0 = result.startMs, t1 = result.startMs + seconds * 1000;
+        const draws = drawLog.filter(x => x.t >= t0 && x.t <= t1).map(x => x.ms);
+        const lt = longTasks.filter(x => x.t >= t0 && x.t <= t1).map(x => x.ms);
+        return {
+          plot_paused: ($('pausePlot') as HTMLInputElement).checked,
+          plot_canvas_px: [canvas.width, canvas.height],
+          plot_draws: draws.length, plot_draw_ms: radar.bench.summarize(draws),
+          long_tasks: lt.length, long_task_ms: radar.bench.summarize(lt),
+        };
+      })(),
     });
     const rec = radar.data.fromFrames(result.frames, FRAME_SHAPE);
     await sink.write(`${name}.npy`, radar.data.saveNpy(rec));

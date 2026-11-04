@@ -137,7 +137,7 @@ export class Link {
     this.parser = new PacketParser({
       onControl: p => this._onControl(p),
       onData: p => { if (this.onData) this.onData(p); },
-      onSyncLost: head => this.log('Sync lost, unknown packet start ' + hex(head)),
+      onSyncLost: head => { this.syncLost = (this.syncLost || 0) + 1; this.log('Sync lost, unknown packet start ' + hex(head)); },   // radar-js: counted
     });
   }
 

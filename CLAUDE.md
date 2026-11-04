@@ -111,6 +111,12 @@ Keep this list current when a copied file has to change.
   SensDSv2 and the SDK's `get_next_raw_frame`) leaves every later frame
   starting mid-stream: antennas rotated and chirps cut in the wrong place.
   Found on the board 2026-11-04; `test/frame_alignment.test.ts`.
+- `src/device/strata.js`, `link.js`, `device.js`, `session.js`: loss
+  diagnostics. Each `SliceAssembler` error says why (`reason`: packet_gap
+  with the packets `lost`, crc_error, channel_mismatch, pool_depleted,
+  size_exceeded, firmware_error); `Link` counts sync losses; `RadarDevice`
+  tallies them (`diagnostics()`); `radarStats()` returns them with the
+  restart total. A drop's restart does not count toward `MAX_RESTARTS`.
 - `src/viz/image.js`: `historyToPlotData` reverses the Doppler rows, so the
   most positive velocity is drawn at the top beside the +max label. SensDSv2's
   figure (and the sensds-web copy) draws toward-the-radar at the top, against
