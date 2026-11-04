@@ -10,6 +10,10 @@ Step 1 checks (numpy only, independent of radar-js's own loader):
   - the frame count matches duration x frame rate within 2 frames; the
     duration comes from --duration, else from the sidecar
   - repeated frames: consecutive frames that are byte-identical
+  - frame alignment: in every chirp the largest sample-to-sample jump is the
+    chirp boundary; on the channel where it stands out most it must fall after
+    sample 255. A frame that starts mid-stream (a lost slice; 2026-11-04) puts
+    it mid-chirp and rotates the antennas, which no other check here notices
 
 Step 2 timing report (when <base>.timing.json exists next to the .npy):
   - frame rate from the arrival times: median and standard deviation of the
@@ -74,6 +78,19 @@ def main():
     repeats = [i for i in range(1, n) if np.array_equal(flat[i], flat[i - 1])]
     ok &= report(not repeats, f"repeated (byte-identical consecutive) frames: {len(repeats)}" + (f" at {repeats[:10]}" if repeats else ""))
 
+    # Frame alignment: where each channel's biggest jump falls within the chirp
+    x = np.asarray(data[: min(30, n)], dtype=np.float64)
+    pos, ratio = [], []
+    for rx in range(data.shape[1]):
+        seq = x[:, rx].reshape(x.shape[0], -1)
+        d = np.abs(np.diff(seq, axis=1))
+        d = np.concatenate([d, np.zeros((x.shape[0], 1))], axis=1).reshape(x.shape[0], data.shape[2], data.shape[3])[:, :-1]
+        per = d.mean(axis=(0, 1))
+        pos.append(int(per.argmax())); ratio.append(float(per.max() / np.median(per)))
+    best = int(np.argmax(ratio))
+    detail = ", ".join(f"rx{r} after {p} ({q:.0f}x)" for r, (p, q) in enumerate(zip(pos, ratio)))
+    ok &= report(pos[best] == data.shape[3] - 1 and ratio[best] > 10, f"frame alignment: chirp boundary after sample {pos[best]} on rx{best} (expected {data.shape[3] - 1}); {detail}")
+
     if sidecar is None:
         print("SKIP  timing report: no .timing.json sidecar")
         return 0 if ok else 1
@@ -86,7 +103,17 @@ def main():
     if len(gaps):
         med, sd = float(np.median(gaps)), float(np.std(gaps, ddof=1)) if len(gaps) > 1 else 0.0
         print(f"      inter-frame gap: median {med:.2f} ms, std {sd:.2f} ms, min {gaps.min():.2f} ms, max {gaps.max():.2f} ms (after frame {int(gaps.argmax())})")
-        print(f"      measured frame rate: {1000 / med:.3f} frames/s (median gap); {1000 * len(gaps) / (t[-1] - t[0]):.3f} frames/s (mean over the recording)")
+        print(f"      measured frame rate (browser clock): {1000 * len(gaps) / (t[-1] - t[0]):.3f} frames/s over the recording; "
+              f"from the median gap {1000 / med:.3f} (misleading when arrivals come in an uneven rhythm)")
+        lo, hi = int((gaps < 0.9 * nominal).sum()), int((gaps > 1.1 * nominal).sum())
+        print(f"      gaps under {0.9 * nominal:g} ms: {lo}, over {1.1 * nominal:g} ms: {hi}, between: {len(gaps) - lo - hi}")
+    fw = [v for v in sidecar.get("firmware_timestamp") or [] if v is not None]
+    if len(fw) == n and n > 1:
+        f = np.diff(np.asarray(fw, dtype=np.int64))
+        steps = dict(zip(*[x.tolist() for x in np.unique(f, return_counts=True)]))
+        print(f"      firmware timestamps: frame period mean {f.mean() / 1000:.4f} ms (if microseconds), steps {steps}")
+        print(f"      measured frame rate (board clock): {1e6 / f.mean():.4f} frames/s; browser/board clock ratio {(t[-1] - t[0]) * 1000 / (fw[-1] - fw[0]):.6f}")
+        ok &= report(bool((f > 0).all()), "firmware timestamps always increase")
         long_gaps = int((gaps > 1.5 * nominal).sum())
         ok &= report(long_gaps == 0, f"gaps longer than {1.5 * nominal:g} ms: {long_gaps}")
     dropped = sidecar.get("frames", {}).get("dropped")

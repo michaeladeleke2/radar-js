@@ -335,6 +335,7 @@ button('liveRecBtn').onclick = async () => {
   if (problem) { $('liveRecInfo').textContent = problem; return; }
   if (await sink.exists?.(`${name}.npy`) && !confirm(`${name}.npy is already in "${sink.name}". Replace it?`)) return;
   liveRecording = true; renderLive();
+  const sessionAtStart = radar.stats();          // frames and drops since Start, when this recording began
   liveRecorder.onProgress = (n, t) => { $('liveRecInfo').textContent = `Recording ${name}: ${t.toFixed(1)} of ${seconds} s, ${n} frames`; };
   try {
     const result = await liveRecorder.start(seconds, CONFIG.frame_repetition_time_s);
@@ -347,6 +348,7 @@ button('liveRecBtn').onclick = async () => {
       browser: `${device.browser} ${device.browserVersion}`.trim(), os: `${device.os} ${device.osVersion}`.trim(),
       config_name: CONFIG_NAME, chirp_time_s: CONFIG.chirp_repetition_time_s, frame_time_s: CONFIG.frame_repetition_time_s,
       start_time: meta.started_at,
+      session_at_start: { frames_since_start: sessionAtStart.frames, drops_since_start: sessionAtStart.drops },
     });
     const rec = radar.data.fromFrames(result.frames, FRAME_SHAPE);
     await sink.write(`${name}.npy`, radar.data.saveNpy(rec));
