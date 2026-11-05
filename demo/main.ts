@@ -126,7 +126,7 @@ function renderLive() {
 }
 
 radar.onState(({ message, restarted }: { message?: string; restarted?: boolean }) => {
-  if (restarted) { clipRecorder.noteRestart(); benchRecorder.noteRestart(); }
+  if (restarted) { liveRecorder.noteRestart(); clipRecorder.noteRestart(); benchRecorder.noteRestart(); }
   if (message && usesBoard(mode)) status(message);
   if (!radar.isStreaming()) finishRecording();
   renderLive();

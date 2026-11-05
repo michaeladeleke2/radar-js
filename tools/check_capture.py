@@ -130,6 +130,14 @@ def main():
     if dropped is not None:
         ok &= report(dropped == 0, f"frames the device reported as dropped: {dropped}")
     restarts = sidecar.get("frames", {}).get("restarts")
+    a, b = sidecar.get("session_at_start"), sidecar.get("session_at_end")
+    if a and b and a.get("restarts_since_start") is not None and b.get("restarts_since_start") is not None:
+        # The session's own count. Live recordings made before the demo passed
+        # restart notices to its Live recorder have frames.restarts 0 always.
+        delta = b["restarts_since_start"] - a["restarts_since_start"]
+        if restarts is not None and restarts != delta:
+            print(f"      note: frames.restarts says {restarts}, the session counted {delta} during the recording; using {delta}")
+        restarts = delta
     if restarts is not None:
         ok &= report(restarts == 0, f"acquisition restarts: {restarts}")
 
