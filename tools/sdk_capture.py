@@ -41,6 +41,24 @@ def sensds_build_config():
     return mod.build_config()
 
 
+def radar_js_build():
+    """The radar-js commit these tools ran from (read from .git, as make_golden.py reads SensDSv2's)."""
+    git = ROOT / ".git"
+    try:
+        head = (git / "HEAD").read_text().strip()
+        commit = head
+        if head.startswith("ref: "):
+            ref = git / head[5:]
+            commit = ref.read_text().strip() if ref.exists() else next(
+                (l.split()[0] for l in (git / "packed-refs").read_text().splitlines() if l.endswith(" " + head[5:])), None)
+        import subprocess
+        dirty = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=no"],
+                               capture_output=True, text=True).stdout.strip() != ""
+        return {"commit": commit[:12] if commit else None, "dirty": dirty, "tool": "tools/sdk_capture.py"}
+    except OSError:
+        return {"commit": None, "dirty": None, "tool": "tools/sdk_capture.py"}
+
+
 def config_dict(cfg):
     c = cfg.chirp
     return {
@@ -104,6 +122,7 @@ def main():
             "machine_label": args.machine, "connection_type": args.connection, "conditions": args.conditions,
             "host": {"python": platform.python_version(), "os": f"{platform.system()} {platform.mac_ver()[0] or platform.release()}"},
             "registers_file": f"{args.name}.registers.txt",
+            "radar_js": radar_js_build(),
         }
         (OUT / f"{args.name}.timing.json").write_text(json.dumps(meta, indent=1))
     print(f"Saved {cube.shape} to test/captures/{args.name}.npy, {dropped} dropped. The radar is closed.")

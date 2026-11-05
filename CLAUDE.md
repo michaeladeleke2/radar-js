@@ -120,13 +120,19 @@ Keep this list current when a copied file has to change.
 - `src/device/link.js`, `device.js`, `session.js`: loss trace. `PacketParser`
   gives each packet its stream position (`offset`, and `raw` for data
   packets; its `clear()` keeps the position); `Link` records every `read()`
-  chunk (position, size, time; the last 512) and traces each CRC error and
-  sync loss (the last 100): bytes missing, found from where the next packet's
-  header sits inside the bad one, and whether the gap lies inside one received
-  chunk. `RadarDevice.lossTraces()`; `radarStats().lossTraces`. The demo saves
-  them in the session log and the recording sidecar (`loss_traces`). Added
+  chunk (position, size, time; the last 512) and the last 256 KB of the
+  stream, and traces each CRC error and sync loss (the last 100). A CRC trace
+  finds the next header (same channel, counter +1 to +8) inside the bad packet
+  or in the 8 KB after it: the signed `shift` from where it should be
+  (negative: bytes missing; positive: bytes added), `counter_step` (over 1:
+  whole packets gone), whether the change lies inside one received chunk, and
+  the packet and the 256 bytes after it as hex. A sync-loss trace gets the
+  first good packet after it (`resync`). `Link.lossTraces()`,
+  `RadarDevice.lossTraces()`, `radarStats().lossTraces`. The demo saves them
+  in the session log and the recording sidecar (`loss_traces`). Added
   2026-11-05 for the CRC-error drops seen with radar-js and not the SDK;
-  `test/loss_trace.test.ts` (the fake board's `cut` option).
+  `test/loss_trace.test.ts` (the fake board's `cut` option: bytes lost or
+  sent twice).
 - `src/viz/image.js`: `historyToPlotData` reverses the Doppler rows, so the
   most positive velocity is drawn at the top beside the +max label. SensDSv2's
   figure (and the sensds-web copy) draws toward-the-radar at the top, against
@@ -134,7 +140,7 @@ Keep this list current when a copied file has to change.
   compares `makeImage` with matplotlib using SensDSv2's unreversed data.
 - `test/fake_board.js`: the simulated board, moved out of `device.test.js`
   and taught the board-info request, several frames per trigger, a lost
-  packet (`lose`) and lost bytes sent in set chunk sizes (`cut`).
+  packet (`lose`) and lost or repeated bytes sent in set chunk sizes (`cut`).
 
 Not from sensds-web (new ports, no copied file changed):
 

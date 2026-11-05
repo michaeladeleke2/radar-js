@@ -32,6 +32,8 @@ const DATA_HEADER_SIZE = 6;
 const CRC_SIZE = 2;
 // radar-js: loss trace sizes (read() chunks remembered, traces kept, chunks listed per trace)
 const CHUNK_HISTORY = 512, TRACE_LIMIT = 100, TRACE_LAST_CHUNKS = 20;
+// radar-js: stream bytes kept for the trace, bytes looked at past a bad packet, and of those saved as hex
+const TAIL_BYTES = 1 << 18, TRACE_LOOKAHEAD = 8192, TRACE_AFTER_HEX = 256;
 // BridgeSerial::getMaxTransfer()
 export const MAX_TRANSFER = MAX_PACKET_SIZE - COMMAND_HEADER_SIZE - CRC_SIZE;
 
@@ -146,55 +148,119 @@ export class Link {
     this.onData = null;            // set by the data path; data packets are dropped while null
     this.parser = new PacketParser({
       onControl: p => this._onControl(p),
-      onData: p => { if (!p.crcOk) this._traceCrc(p); if (this.onData) this.onData(p); },   // radar-js: loss trace
+      onData: p => {   // radar-js: loss trace
+        if (!p.crcOk) this._traceCrc(p);
+        else if (this.awaitingResync.length) this._resynced(p);
+        if (this.onData) this.onData(p);
+      },
       onSyncLost: (head, offset) => {   // radar-js: counted and traced
         this.syncLost = (this.syncLost || 0) + 1;
-        this._pushTrace({ kind: 'sync_lost', offset, head: hex(head) });
+        const trace = { kind: 'sync_lost', offset, head: hex(head), resync: null };
+        this.awaitingResync.push(trace);
+        this._pushTrace(trace);
         this.log('Sync lost, unknown packet start ' + hex(head));
       },
     });
     // radar-js: loss trace. Every read() chunk's stream position, size and
-    // time (the last CHUNK_HISTORY), and a record of each CRC error and sync
-    // loss (the last TRACE_LIMIT), so a loss can be placed against the reads.
+    // time (the last CHUNK_HISTORY), the last TAIL_BYTES of the stream itself,
+    // and a record of each CRC error and sync loss (the last TRACE_LIMIT), so
+    // a loss can be placed against the reads and its bytes looked at.
     this.bytesRead = 0;
     this.chunks = [];
+    this.tail = new Uint8Array(TAIL_BYTES);   // stream byte x is at x % TAIL_BYTES while x >= bytesRead - TAIL_BYTES
     this.traces = [];
     this.traceSeq = 0;
+    this.pendingCrc = [];       // CRC traces still waiting for the bytes after the bad packet
+    this.awaitingResync = [];   // sync-loss traces waiting for the next good data packet
   }
 
-  // radar-js: a CRC error on a data packet. When bytes are missing, the
-  // packet's declared length runs into the next packet, whose header (same
-  // channel, counter + 1) then sits inside the bytes taken for this one. Its
-  // position gives how many bytes were lost, and bounds where: somewhere
-  // after this packet's header and before that one. If no read() chunk starts
-  // inside that window, the bytes were already missing within a single chunk
-  // the page received (lost before the page read them); if one does, a loss
-  // between two reads is possible but not shown.
-  _traceCrc(p) {
-    const raw = p.raw, total = raw.length, next = (p.counter + 1) & 0xFFFF;
-    let at = -1;
-    for (let i = DATA_HEADER_SIZE; i + 3 < total; i++) {
-      if ((raw[i] & 0xF0) === DATA_FRAME_PACKET && raw[i + 1] === p.channel && (raw[i + 2] | (raw[i + 3] << 8)) === next) { at = i; break; }
-    }
-    // header_plausible false: a "packet" read from payload bytes after an earlier loss (length past the largest packet)
-    const trace = { kind: 'crc_error', offset: p.offset, counter: p.counter, channel: p.channel, declared_bytes: total,
-      header_plausible: total <= MAX_PACKET_SIZE, next_header_at: at >= 0 ? at : null };
-    if (at >= 0) {
-      const from = p.offset + DATA_HEADER_SIZE, to = p.offset + at;   // the gap is just before a stream position in [from, to]
-      const boundaries = this.chunks.filter(c => c.start >= from && c.start <= to).map(c => c.start);
-      const first = this._chunkAt(from);
-      Object.assign(trace, {
-        bytes_missing: total - at,
-        gap_window: [from, to],
-        chunk_starts_in_window: boundaries,
-        gap_inside_one_chunk: boundaries.length === 0 && first !== null && to < first.start + first.n,
-      });
-    }
-    trace.chunks = this.chunks.filter(c => c.start + c.n > p.offset - 4096 && c.start < p.offset + total + 4096).slice(-40)
-      .map(c => ({ start: c.start, bytes: c.n, t_ms: c.t }));
-    trace.last_chunks = this.chunks.slice(-TRACE_LAST_CHUNKS).map(c => ({ start: c.start, bytes: c.n, t_ms: c.t }));
-    this._pushTrace(trace);
+  // radar-js: stream bytes [from, to) from the tail, or as much of it as is still held
+  _bytes(from, to) {
+    from = Math.max(from, this.bytesRead - TAIL_BYTES);
+    to = Math.min(to, this.bytesRead);
+    const out = new Uint8Array(Math.max(0, to - from));
+    for (let i = 0; i < out.length; i++) out[i] = this.tail[(from + i) % TAIL_BYTES];
+    return out;
   }
+
+  _keep(bytes) {
+    const skip = Math.max(0, bytes.length - TAIL_BYTES);
+    let src = bytes.subarray(skip), at = (this.bytesRead + skip) % TAIL_BYTES;
+    while (src.length) {
+      const n = Math.min(src.length, TAIL_BYTES - at);
+      this.tail.set(src.subarray(0, n), at);
+      src = src.subarray(n); at = 0;
+    }
+  }
+
+  // radar-js: a CRC error on a data packet. The next packet's header (same
+  // channel, counter + 1 to + 8) is looked for inside the bad packet and in
+  // the bytes after it. Where it sits against where it should be (right
+  // after the bad packet's declared length) is the shift: negative, that many
+  // bytes are missing; positive, that many bytes were added; a counter step
+  // over 1 means whole packets vanished too. The bytes changed somewhere
+  // between this packet's header and that next header (gap_window); if no
+  // read() chunk starts inside that window, they were already wrong within a
+  // single chunk the page received, i.e. before the page read them.
+  _traceCrc(p) {
+    const trace = { kind: 'crc_error', offset: p.offset, counter: p.counter, channel: p.channel, declared_bytes: p.raw.length,
+      // header_plausible false: a "packet" read from payload bytes after an earlier loss (length past the largest packet)
+      header_plausible: p.raw.length <= MAX_PACKET_SIZE, next_header_at: null, complete: false };
+    this._pushTrace(trace);
+    if (trace.header_plausible) { this.pendingCrc.push(trace); this._completeCrc(); }
+    else this._finishCrc(trace);
+  }
+
+  _completeCrc(force = false) {
+    this.pendingCrc = this.pendingCrc.filter(t => {
+      if (!force && this.bytesRead < t.offset + t.declared_bytes + TRACE_LOOKAHEAD) return true;
+      this._finishCrc(t);
+      return false;
+    });
+  }
+
+  _finishCrc(t) {
+    const end = t.offset + t.declared_bytes;
+    const bytes = this._bytes(t.offset, end + TRACE_LOOKAHEAD);
+    let at = -1, step = 0;
+    for (let i = DATA_HEADER_SIZE; i + 5 < bytes.length && at < 0; i++) {
+      if ((bytes[i] & 0xF0) !== DATA_FRAME_PACKET || bytes[i + 1] !== t.channel) continue;
+      const k = ((bytes[i + 2] | (bytes[i + 3] << 8)) - t.counter) & 0xFFFF;
+      const len = bytes[i + 4] | (bytes[i + 5] << 8);
+      if (k >= 1 && k <= 8 && len <= MAX_PACKET_SIZE - DATA_HEADER_SIZE - CRC_SIZE) { at = i; step = k; }
+    }
+    t.complete = true;
+    t.bytes_looked_at = bytes.length;
+    t.chunks = this.chunks.filter(c => c.start + c.n > t.offset - 4096 && c.start < end + 4096).slice(-40)
+      .map(c => ({ start: c.start, bytes: c.n, t_ms: c.t }));
+    t.bytes_hex = hex(bytes.subarray(0, Math.min(bytes.length, t.declared_bytes))).replace(/ /g, '');
+    t.after_hex = hex(bytes.subarray(t.declared_bytes, t.declared_bytes + TRACE_AFTER_HEX)).replace(/ /g, '');
+    if (at < 0) return;
+    const shift = at - t.declared_bytes;
+    const from = t.offset + DATA_HEADER_SIZE, to = t.offset + at;
+    const starts = this.chunks.filter(c => c.start >= from && c.start <= to).map(c => c.start);
+    const first = this._chunkAt(from);
+    Object.assign(t, {
+      next_header_at: at,
+      next_counter: (t.counter + step) & 0xFFFF,
+      counter_step: step,
+      shift,
+      bytes_missing: step === 1 && shift < 0 ? -shift : null,
+      bytes_inserted: step === 1 && shift > 0 ? shift : null,
+      gap_window: [from, to],
+      chunk_starts_in_window: starts,
+      gap_inside_one_chunk: starts.length === 0 && first !== null && to < first.start + first.n,
+    });
+  }
+
+  // radar-js: the first good data packet after sync losses: where the stream was picked up again
+  _resynced(p) {
+    for (const t of this.awaitingResync) t.resync = { offset: p.offset, counter: p.counter, bytes_skipped: p.offset - t.offset, t_ms: +performance.now().toFixed(1) };
+    this.awaitingResync = [];
+  }
+
+  // radar-js: the traces so far, finishing any CRC trace still waiting for bytes
+  lossTraces() { this._completeCrc(true); return this.traces; }
 
   _chunkAt(pos) {
     for (let i = this.chunks.length - 1; i >= 0; i--) { const c = this.chunks[i]; if (pos >= c.start && pos < c.start + c.n) return c; }
@@ -202,7 +268,11 @@ export class Link {
   }
 
   _pushTrace(trace) {
-    this.traces.push({ seq: ++this.traceSeq, t_ms: +performance.now().toFixed(1), bytes_read: this.bytesRead, ...trace });
+    trace.seq = ++this.traceSeq;
+    trace.t_ms = +performance.now().toFixed(1);
+    trace.bytes_read = this.bytesRead;
+    trace.last_chunks = this.chunks.slice(-TRACE_LAST_CHUNKS).map(c => ({ start: c.start, bytes: c.n, t_ms: c.t }));
+    this.traces.push(trace);
     if (this.traces.length > TRACE_LIMIT) this.traces.shift();
   }
 
@@ -226,8 +296,10 @@ export class Link {
           this.lastRx = performance.now();
           this.chunks.push({ start: this.bytesRead, n: value.length, t: +this.lastRx.toFixed(1) });   // radar-js: loss trace
           if (this.chunks.length > CHUNK_HISTORY) this.chunks.shift();
+          this._keep(value);
           this.bytesRead += value.length;
           this.parser.push(value);
+          if (this.pendingCrc.length) this._completeCrc();
         }
       }
     } catch (e) { if (!this.closed) this.log('Read loop error: ' + e.message); }

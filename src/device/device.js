@@ -55,7 +55,7 @@ export class RadarDevice {
   }
 
   // radar-js: the link's loss trace (CRC errors and sync losses placed against the read() chunks)
-  lossTraces() { return this.link?.traces ?? []; }
+  lossTraces() { return this.link?.lossTraces() ?? []; }
 
   // Open the port (921600, then 1000000 as the SDK tries) and identify the chip.
   async open() {

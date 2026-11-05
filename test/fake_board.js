@@ -73,14 +73,16 @@ export class FakeBoard {
   // radar-js loss trace: cut = { trigger, frame, at, bytes, chunk } removes
   // `bytes` bytes at position `at` of that frame's byte stream (packets and
   // all), as a link that lost bytes would, and sends the frame in chunks of
-  // `chunk` bytes (0: the whole frame in one chunk).
+  // `chunk` bytes (0: the whole frame in one chunk). With `insert: n` instead
+  // of `bytes`, the n bytes before `at` are sent twice (bytes added).
   streamFrame(frameBytes = this.frameBytes, loseSlice = -1, cut = null) {
     if (cut) {
       const parts = [];
       const send = this.send;
       this.send = bytes => parts.push(...bytes);
       try { this.streamFrame(frameBytes, loseSlice); } finally { this.send = send; }
-      parts.splice(cut.at, cut.bytes);
+      if (cut.insert) parts.splice(cut.at, 0, ...parts.slice(cut.at - cut.insert, cut.at));   // the bytes just before, again
+      else parts.splice(cut.at, cut.bytes);
       const step = cut.chunk || parts.length;
       for (let i = 0; i < parts.length; i += step) this.send(parts.slice(i, i + step));
       return;

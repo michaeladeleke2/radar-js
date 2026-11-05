@@ -152,19 +152,52 @@ def main():
     else:
         print(f"      device frame counter: not usable ({len(counter)} of {n} frames carry one)")
 
+    # Realignments: each gap over 1.15 frame periods (on the board clock when
+    # the sidecar has it; arrival jitter stays within a few ms), its length on
+    # both clocks and the frames the board made meanwhile.
+    if n > 1:
+        fwl = [v for v in sidecar.get("firmware_timestamp") or [] if v is not None]
+        board_gaps = np.diff(np.asarray(fwl, dtype=np.int64)) / 1000.0 if len(fwl) == n else gaps
+        idx = [int(i) for i in np.where(board_gaps > 1.15 * nominal)[0]]
+        if idx:
+            print(f"      realignment gaps ({len(idx)}):")
+            for i in idx:
+                line = f"        after frame {i}: {gaps[i]:.1f} ms (browser clock)"
+                if len(fwl) == n:
+                    fg = (fwl[i + 1] - fwl[i]) / 1000.0
+                    line += f", {fg:.1f} ms (board clock), {round(fg / nominal) - 1} frames not received"
+                print(line)
+
     traces = sidecar.get("loss_traces")
     if traces is not None:
         crc = [x for x in traces if x.get("kind") == "crc_error" and x.get("header_plausible")]
-        sync = sum(1 for x in traces if x.get("kind") == "sync_lost")
-        print(f"      loss trace: {len(crc)} CRC errors on plausible packets, {sync} sync losses, {len(traces) - len(crc) - sync} other")
+        sync = [x for x in traces if x.get("kind") == "sync_lost"]
+        print(f"      loss trace: {len(crc)} CRC errors on plausible packets, {len(sync)} sync losses, {len(traces) - len(crc) - len(sync)} other")
         for x in crc:
-            if x.get("bytes_missing") is None:
-                print(f"        t {x['t_ms']} ms, counter {x['counter']}: CRC error, next header not found inside the packet (corrupted bytes, or a loss that spans it)")
+            head = f"        t {x['t_ms']} ms, counter {x['counter']}: "
+            if x.get("next_header_at") is None:
+                looked = x.get("bytes_looked_at")
+                print(head + "CRC error; no next header (counter +1 to +8) found" + (f" in the {looked} bytes from the packet start" if looked else " inside the packet")
+                      + " (corrupted bytes, added bytes past the look-ahead, or a longer loss)")
                 continue
-            m = x["bytes_missing"]
-            where = ("inside one received read() chunk (lost before the page read it)" if x["gap_inside_one_chunk"]
-                     else f"window holds {len(x['chunk_starts_in_window'])} read() chunk start(s) (a loss between reads is possible)")
-            print(f"        t {x['t_ms']} ms, counter {x['counter']}: {m} bytes missing (mod 64 = {m % 64}, mod 512 = {m % 512}); gap {where}")
+            step, shift = x.get("counter_step", 1), x.get("shift", x.get("next_header_at") - x["declared_bytes"])
+            if step == 1 and shift < 0:
+                what = f"{-shift} bytes missing (mod 64 = {-shift % 64}, mod 512 = {-shift % 512})"
+            elif step == 1 and shift > 0:
+                what = f"{shift} bytes added (mod 64 = {shift % 64}, mod 512 = {shift % 512})"
+            elif step == 1:
+                what = "no bytes missing or added (bytes corrupted in place)"
+            else:
+                what = f"next header is counter +{step} ({step - 1} packet(s) gone with the loss), {shift:+d} bytes from where the next packet should start"
+            if x.get("gap_inside_one_chunk"):
+                where = "inside one received read() chunk (wrong before the page read it)"
+            else:
+                where = f"window holds {len(x.get('chunk_starts_in_window') or [])} read() chunk start(s) (between reads is possible)"
+            print(head + what + "; " + where)
+        for x in sync:
+            r = x.get("resync")
+            if r:
+                print(f"        sync lost at t {x['t_ms']} ms: picked up again {r['bytes_skipped']} bytes on, at counter {r['counter']}")
 
     print("\n" + ("ALL CHECKS PASS" if ok else "SOME CHECKS FAIL"))
     return 0 if ok else 1
