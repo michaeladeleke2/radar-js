@@ -140,7 +140,70 @@ The spectrogram plot was upside down; radar.dsp was right.
 - Pinned by `test/velocity_sign.test.ts` with 10 frames of that recording
   (`test/fixtures/sign/hand_away_toward.npy`).
 
+## 2026-10-21: capture layer, Dataset mode, benchmark (merged into main)
+
+- `radar.capture`: timed recordings with a timing sidecar (`<name>.timing.json`:
+  arrival times, board, browser, radar-js build), saved to a chosen folder
+  (File System Access, remembered) or downloaded. `radar.bench`: timed
+  processing in a worker and summary statistics.
+- Demo: Dataset mode for labeled clips (`data/README.md`, the recording
+  protocol; `tools/check_captures.ts` writes `data/manifest.csv`), and a Live
+  benchmark.
+
+## 2026-11-04: frame alignment, loss diagnostics, SDK A/B (branch eval/live-verification)
+
+- **Frame metadata** from the device: each frame's packet counter and
+  firmware timestamp reach `onFrame` (`test/frame_meta.test.ts`), so the
+  board's own clock times every frame.
+- **Frames misaligned after a dropped slice.** A live session had every frame
+  starting one slice late (antennas rotated, chirps cut 86 samples off).
+  After a lost slice the reader starts its next frame at whatever slice
+  comes next, as the SDK's `get_next_raw_frame` does; SensDSv2
+  (`core/radar.py`, `_TRANSIENT_ERRORS`) and sensds-web also skip and go on.
+  radar-js now restarts the acquisition on a drop
+  (`test/frame_alignment.test.ts`). `tools/check_capture.py` checks the
+  alignment of every capture.
+- **Loss diagnostics**: why each drop happened (packet gap, CRC error, sync
+  lost, ...), per phase (idle, recording, saving), in a session log.
+  Stopping the radar while saving removed save-time losses.
+- **Antenna 0 clips** about 18–20% of samples at ADC code 0; the same with
+  the Infineon SDK on the same placement, and the same register values for
+  all three channels. Antenna 1 is used for figures and sanity checks.
+- **A/B with the SDK** (`tools/sdk_capture.py`, SensDSv2's `build_config`):
+  per-antenna means within 8 codes, mean chirps r ≥ 0.9995, registers equal
+  apart from the FIFO field written at start.
+
+## 2026-11-05: live verification (branch eval/live-verification)
+
+Results in `docs/verification-summary.md`; capture checksums in
+`docs/verification-captures.sha256`. Summary:
+
+- **Level 1 decoder check** against the Infineon SDK
+  (`tools/compare_ab.py`): pan at 1.0 m 21/21 checks, at 2.0 m back to back
+  20/21 (same range bins, levels within 0.33 dB); hand motion 4/5 (the second
+  hand motion was slower).
+- **Five live captures** (`empty_room`, `static_target`, `hand_gesture`,
+  `walking`, `mixed`): 4 with no drop; frame period 100.011 ms on the board
+  clock (9.9989 frames/s); the browser clock within 62–297 ppm.
+- **Sanity checks** (`tools/sanity_checks.ts`, radar.dsp, antenna 1): the pan
+  at 1.0 m reads 0.933 m (6–8 cm short at 1 and 2 m in both readers: a fixed
+  offset); toward is negative in 96.6–98.9% of moving frames.
+- **Live golden data** (`make_golden.py --input`): hand_gesture 0:50,
+  walking 0:50, empty_room 100:150, antennas 0 and 1, from SensDSv2
+  `f693dd1`. 240 golden checks pass (SDK, synthetic and 6 live inputs);
+  worst live error 4.1e-10 dB (`rangeDopplerMap`). The live `.npy` files are
+  not committed (112 MB); their manifests and SHA-256 sums are.
+- **Loss trace** (`src/device/link.js`): each CRC error placed in the byte
+  stream. During captures 4b–4e all 123 drops were while idle (none while
+  recording or saving); the traced losses are bytes missing, not added. Where they are lost is open.
+- Fixed: the Live recorder counted no restarts (`98c02a9`).
+- Open items: `docs/verification-summary.md` section 6.
+
 ## Next
+
+0. From the verification (`docs/verification-summary.md` section 6): the USB
+   loss soak test, realignment time, a third range distance, Level 2
+   (same bytes through both decoders), the Session B benchmark page.
 
 1. ~~Velocity sign~~ (done 2026-10-21).
 2. Compare a live capture with SensDSv2 frame by frame, and show the STFT
