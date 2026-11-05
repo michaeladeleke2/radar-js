@@ -152,6 +152,20 @@ def main():
     else:
         print(f"      device frame counter: not usable ({len(counter)} of {n} frames carry one)")
 
+    traces = sidecar.get("loss_traces")
+    if traces is not None:
+        crc = [x for x in traces if x.get("kind") == "crc_error" and x.get("header_plausible")]
+        sync = sum(1 for x in traces if x.get("kind") == "sync_lost")
+        print(f"      loss trace: {len(crc)} CRC errors on plausible packets, {sync} sync losses, {len(traces) - len(crc) - sync} other")
+        for x in crc:
+            if x.get("bytes_missing") is None:
+                print(f"        t {x['t_ms']} ms, counter {x['counter']}: CRC error, next header not found inside the packet (corrupted bytes, or a loss that spans it)")
+                continue
+            m = x["bytes_missing"]
+            where = ("inside one received read() chunk (lost before the page read it)" if x["gap_inside_one_chunk"]
+                     else f"window holds {len(x['chunk_starts_in_window'])} read() chunk start(s) (a loss between reads is possible)")
+            print(f"        t {x['t_ms']} ms, counter {x['counter']}: {m} bytes missing (mod 64 = {m % 64}, mod 512 = {m % 512}); gap {where}")
+
     print("\n" + ("ALL CHECKS PASS" if ok else "SOME CHECKS FAIL"))
     return 0 if ok else 1
 

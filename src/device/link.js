@@ -30,6 +30,8 @@ const COMMAND_HEADER_SIZE = 8;
 const RESPONSE_HEADER_SIZE = 4;
 const DATA_HEADER_SIZE = 6;
 const CRC_SIZE = 2;
+// radar-js: loss trace sizes (read() chunks remembered, traces kept, chunks listed per trace)
+const CHUNK_HISTORY = 512, TRACE_LIMIT = 100, TRACE_LAST_CHUNKS = 20;
 // BridgeSerial::getMaxTransfer()
 export const MAX_TRANSFER = MAX_PACKET_SIZE - COMMAND_HEADER_SIZE - CRC_SIZE;
 
@@ -78,7 +80,11 @@ export class PacketParser {
     this.onControl = onControl;
     this.onData = onData;
     this.onSyncLost = onSyncLost;
+    this.offset = 0;   // radar-js: stream position of the queue's first byte (bytes pushed and consumed so far)
   }
+
+  // radar-js: drop what is buffered, keeping the stream position
+  clear() { this.offset += this.queue.length; this.queue.clear(); }
 
   push(bytes) {
     this.queue.push(bytes);
@@ -91,8 +97,11 @@ export class PacketParser {
         const wLength = q.peek(4) | (q.peek(5) << 8);
         const total = DATA_HEADER_SIZE + wLength + CRC_SIZE;
         if (q.length < total) return;
+        const offset = this.offset;
         const raw = q.take(total);
+        this.offset += total;
         this.onData({
+          offset, raw,   // radar-js: for the loss trace
           type,
           channel: raw[1],
           counter: raw[2] | (raw[3] << 8),
@@ -104,6 +113,7 @@ export class PacketParser {
         const total = RESPONSE_HEADER_SIZE + wLength + CRC_SIZE;
         if (q.length < total) return;
         const raw = q.take(total);
+        this.offset += total;
         this.onControl({
           type,
           status: raw[1],
@@ -115,14 +125,14 @@ export class PacketParser {
         // BridgeSerial::readPacketStart: unknown packet type, synchronization lost.
         // The SDK marks the link for resynchronisation and clears the input
         // buffer before the next command; we drop what is buffered now.
+        const offset = this.offset;
         const head = q.take(Math.min(4, q.length));
-        q.clear();
-        if (this.onSyncLost) this.onSyncLost(head);
+        this.clear();
+        this.offset += head.length;
+        if (this.onSyncLost) this.onSyncLost(head, offset);
       }
     }
   }
-
-  clear() { this.queue.clear(); }
 }
 
 export class Link {
@@ -136,9 +146,64 @@ export class Link {
     this.onData = null;            // set by the data path; data packets are dropped while null
     this.parser = new PacketParser({
       onControl: p => this._onControl(p),
-      onData: p => { if (this.onData) this.onData(p); },
-      onSyncLost: head => { this.syncLost = (this.syncLost || 0) + 1; this.log('Sync lost, unknown packet start ' + hex(head)); },   // radar-js: counted
+      onData: p => { if (!p.crcOk) this._traceCrc(p); if (this.onData) this.onData(p); },   // radar-js: loss trace
+      onSyncLost: (head, offset) => {   // radar-js: counted and traced
+        this.syncLost = (this.syncLost || 0) + 1;
+        this._pushTrace({ kind: 'sync_lost', offset, head: hex(head) });
+        this.log('Sync lost, unknown packet start ' + hex(head));
+      },
     });
+    // radar-js: loss trace. Every read() chunk's stream position, size and
+    // time (the last CHUNK_HISTORY), and a record of each CRC error and sync
+    // loss (the last TRACE_LIMIT), so a loss can be placed against the reads.
+    this.bytesRead = 0;
+    this.chunks = [];
+    this.traces = [];
+    this.traceSeq = 0;
+  }
+
+  // radar-js: a CRC error on a data packet. When bytes are missing, the
+  // packet's declared length runs into the next packet, whose header (same
+  // channel, counter + 1) then sits inside the bytes taken for this one. Its
+  // position gives how many bytes were lost, and bounds where: somewhere
+  // after this packet's header and before that one. If no read() chunk starts
+  // inside that window, the bytes were already missing within a single chunk
+  // the page received (lost before the page read them); if one does, a loss
+  // between two reads is possible but not shown.
+  _traceCrc(p) {
+    const raw = p.raw, total = raw.length, next = (p.counter + 1) & 0xFFFF;
+    let at = -1;
+    for (let i = DATA_HEADER_SIZE; i + 3 < total; i++) {
+      if ((raw[i] & 0xF0) === DATA_FRAME_PACKET && raw[i + 1] === p.channel && (raw[i + 2] | (raw[i + 3] << 8)) === next) { at = i; break; }
+    }
+    // header_plausible false: a "packet" read from payload bytes after an earlier loss (length past the largest packet)
+    const trace = { kind: 'crc_error', offset: p.offset, counter: p.counter, channel: p.channel, declared_bytes: total,
+      header_plausible: total <= MAX_PACKET_SIZE, next_header_at: at >= 0 ? at : null };
+    if (at >= 0) {
+      const from = p.offset + DATA_HEADER_SIZE, to = p.offset + at;   // the gap is just before a stream position in [from, to]
+      const boundaries = this.chunks.filter(c => c.start >= from && c.start <= to).map(c => c.start);
+      const first = this._chunkAt(from);
+      Object.assign(trace, {
+        bytes_missing: total - at,
+        gap_window: [from, to],
+        chunk_starts_in_window: boundaries,
+        gap_inside_one_chunk: boundaries.length === 0 && first !== null && to < first.start + first.n,
+      });
+    }
+    trace.chunks = this.chunks.filter(c => c.start + c.n > p.offset - 4096 && c.start < p.offset + total + 4096).slice(-40)
+      .map(c => ({ start: c.start, bytes: c.n, t_ms: c.t }));
+    trace.last_chunks = this.chunks.slice(-TRACE_LAST_CHUNKS).map(c => ({ start: c.start, bytes: c.n, t_ms: c.t }));
+    this._pushTrace(trace);
+  }
+
+  _chunkAt(pos) {
+    for (let i = this.chunks.length - 1; i >= 0; i--) { const c = this.chunks[i]; if (pos >= c.start && pos < c.start + c.n) return c; }
+    return null;
+  }
+
+  _pushTrace(trace) {
+    this.traces.push({ seq: ++this.traceSeq, t_ms: +performance.now().toFixed(1), bytes_read: this.bytesRead, ...trace });
+    if (this.traces.length > TRACE_LIMIT) this.traces.shift();
   }
 
   async open(baudRate) {
@@ -157,7 +222,13 @@ export class Link {
       while (!this.closed) {
         const { value, done } = await this.reader.read();
         if (done) break;
-        if (value && value.length) { this.lastRx = performance.now(); this.parser.push(value); }
+        if (value && value.length) {
+          this.lastRx = performance.now();
+          this.chunks.push({ start: this.bytesRead, n: value.length, t: +this.lastRx.toFixed(1) });   // radar-js: loss trace
+          if (this.chunks.length > CHUNK_HISTORY) this.chunks.shift();
+          this.bytesRead += value.length;
+          this.parser.push(value);
+        }
       }
     } catch (e) { if (!this.closed) this.log('Read loop error: ' + e.message); }
   }

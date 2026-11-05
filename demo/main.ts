@@ -334,7 +334,8 @@ button('liveFolderBtn').onclick = pickFolder;
 // ---------- Session log: when each loss happened (idle, recording, saving) ----------
 type Phase = 'idle' | 'recording' | 'saving';
 let phase: Phase = 'idle';
-const sessionLog = { started_ms: performance.now(), events: [] as Record<string, unknown>[], saves: [] as Record<string, unknown>[] };
+const sessionLog = { started_ms: performance.now(), events: [] as Record<string, unknown>[], saves: [] as Record<string, unknown>[], loss_traces: [] as Record<string, unknown>[] };
+const seenTraces = new Set<string>();   // a reconnect makes a new link, whose trace numbers start again
 let lastDiag: Record<string, number> | null = null, lastDrops = 0, lastFrames = 0;
 function pollLoss() {
   const st = radar.stats();
@@ -351,6 +352,10 @@ function pollLoss() {
     if (Object.keys(changes).length) sessionLog.events.push({ t_ms: +performance.now().toFixed(1), frame: st.frames, phase, ...changes });
   }
   lastDiag = { ...d }; lastDrops = st.drops;
+  for (const tr of (st.lossTraces ?? []) as Record<string, unknown>[]) {
+    const key = `${tr.t_ms}:${tr.seq}`;
+    if (!seenTraces.has(key)) { seenTraces.add(key); sessionLog.loss_traces.push({ phase, ...tr }); }
+  }
 }
 setInterval(pollLoss, 100);
 const eventsBetween = (t0: number, t1: number) => sessionLog.events.filter(e => (e.t_ms as number) >= t0 && (e.t_ms as number) <= t1);
@@ -368,7 +373,7 @@ button('sessionLogBtn').onclick = async () => {
     connection_type: ($('recConnection') as HTMLSelectElement).value, machine_label: deviceName(),
     session: { frames_since_start: st.frames, drops_since_start: st.drops, restarts_since_start: st.restarts, loss_diagnostics: st.diagnostics },
     totals_by_phase: { idle: tally(sessionLog.events.filter(e => e.phase === 'idle')), recording: tally(sessionLog.events.filter(e => e.phase === 'recording')), saving: tally(sessionLog.events.filter(e => e.phase === 'saving')) },
-    saves: sessionLog.saves, events: sessionLog.events,
+    saves: sessionLog.saves, events: sessionLog.events, loss_traces: sessionLog.loss_traces,
     long_tasks: longTasks.map(x => ({ t_ms: +x.t.toFixed(1), ms: +x.ms.toFixed(1) })),
   };
   await sink.write(`${name}.session.json`, new Blob([JSON.stringify(body, null, 1)], { type: 'application/json' }));
@@ -425,6 +430,7 @@ button('liveRecBtn').onclick = async () => {
       })(),
     });
     meta.loss_during_recording = tally(eventsBetween(result.startMs, recEnd));
+    meta.loss_traces = sessionLog.loss_traces.filter(x => (x.t_ms as number) >= result.startMs && (x.t_ms as number) <= recEnd);
     meta.radar_stopped_while_saving = stopForSave;
     const rec = radar.data.fromFrames(result.frames, FRAME_SHAPE);
     await sink.write(`${name}.npy`, radar.data.saveNpy(rec));

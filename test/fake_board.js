@@ -52,7 +52,8 @@ export class FakeBoard {
       if (last[0] === 0x01 && (last[3] & 1)) {
         this.triggers = (this.triggers || 0) + 1;
         setTimeout(() => (this.overflowOnTrigger === this.triggers ? this.sendOverflow()
-          : this.frameList ? this.frameList.forEach((f, i) => this.streamFrame(f, this.lose?.trigger === this.triggers && this.lose.frame === i ? this.lose.slice : -1))
+          : this.frameList ? this.frameList.forEach((f, i) => this.streamFrame(f, this.lose?.trigger === this.triggers && this.lose.frame === i ? this.lose.slice : -1,
+            this.cut?.trigger === this.triggers && this.cut.frame === i ? this.cut : null))
           : this.streamFrame()), 0);
       }
     }
@@ -68,7 +69,22 @@ export class FakeBoard {
   // to stream several frames per trigger, and lose = { trigger, frame, slice }
   // to lose the second packet of that slice (its counter is skipped, as on a
   // real link that dropped it).
-  streamFrame(frameBytes = this.frameBytes, loseSlice = -1) {
+  //
+  // radar-js loss trace: cut = { trigger, frame, at, bytes, chunk } removes
+  // `bytes` bytes at position `at` of that frame's byte stream (packets and
+  // all), as a link that lost bytes would, and sends the frame in chunks of
+  // `chunk` bytes (0: the whole frame in one chunk).
+  streamFrame(frameBytes = this.frameBytes, loseSlice = -1, cut = null) {
+    if (cut) {
+      const parts = [];
+      const send = this.send;
+      this.send = bytes => parts.push(...bytes);
+      try { this.streamFrame(frameBytes, loseSlice); } finally { this.send = send; }
+      parts.splice(cut.at, cut.bytes);
+      const step = cut.chunk || parts.length;
+      for (let i = 0; i < parts.length; i += step) this.send(parts.slice(i, i + step));
+      return;
+    }
     const sliceBytes = 12288;
     for (let s = 0, k = 0; s < frameBytes.length; s += sliceBytes, k++) {
       const slice = frameBytes.subarray(s, s + sliceBytes);

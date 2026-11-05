@@ -85,7 +85,12 @@ export const radar = {
   isStreaming,
   /** Board info from the last handshake, or null. */
   boardInfo: (): BoardInfo | null => boardInfo(),
-  /** { frames, drops } since the last start. */
+  /**
+   * Since the last start: { frames, drops, restarts, diagnostics, lossTraces }.
+   * diagnostics counts why data was lost; lossTraces (the last 100) places
+   * each CRC error and sync loss in the byte stream against the read() chunks:
+   * bytes_missing, gap_window, gap_inside_one_chunk.
+   */
   stats: radarStats,
   /** True in browsers with Web Serial (Chrome, Edge on a computer). */
   hasWebSerial,

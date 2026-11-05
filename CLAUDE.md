@@ -117,13 +117,24 @@ Keep this list current when a copied file has to change.
   size_exceeded, firmware_error); `Link` counts sync losses; `RadarDevice`
   tallies them (`diagnostics()`); `radarStats()` returns them with the
   restart total. A drop's restart does not count toward `MAX_RESTARTS`.
+- `src/device/link.js`, `device.js`, `session.js`: loss trace. `PacketParser`
+  gives each packet its stream position (`offset`, and `raw` for data
+  packets; its `clear()` keeps the position); `Link` records every `read()`
+  chunk (position, size, time; the last 512) and traces each CRC error and
+  sync loss (the last 100): bytes missing, found from where the next packet's
+  header sits inside the bad one, and whether the gap lies inside one received
+  chunk. `RadarDevice.lossTraces()`; `radarStats().lossTraces`. The demo saves
+  them in the session log and the recording sidecar (`loss_traces`). Added
+  2026-11-05 for the CRC-error drops seen with radar-js and not the SDK;
+  `test/loss_trace.test.ts` (the fake board's `cut` option).
 - `src/viz/image.js`: `historyToPlotData` reverses the Doppler rows, so the
   most positive velocity is drawn at the top beside the +max label. SensDSv2's
   figure (and the sensds-web copy) draws toward-the-radar at the top, against
   its own labels; found with the board on 2026-10-21. `test/viz.test.js` still
   compares `makeImage` with matplotlib using SensDSv2's unreversed data.
 - `test/fake_board.js`: the simulated board, moved out of `device.test.js`
-  and taught the board-info request.
+  and taught the board-info request, several frames per trigger, a lost
+  packet (`lose`) and lost bytes sent in set chunk sizes (`cut`).
 
 Not from sensds-web (new ports, no copied file changed):
 

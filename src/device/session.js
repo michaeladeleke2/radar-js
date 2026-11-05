@@ -20,7 +20,7 @@ export const isStreaming = () => session.running;
 // { firmware, chip, board } from the handshake, or null when not connected
 export const boardInfo = () => session.info;
 // radar-js: restarts since Start, and the device's loss diagnostics (why frames were dropped)
-export const radarStats = () => ({ frames: session.frames, drops: session.drops, restarts: session.restartsTotal, diagnostics: session.device?.diagnostics?.() ?? null });
+export const radarStats = () => ({ frames: session.frames, drops: session.drops, restarts: session.restartsTotal, diagnostics: session.device?.diagnostics?.() ?? null, lossTraces: session.device?.lossTraces?.() ?? [] });
 export const hasWebSerial = () => 'serial' in navigator;
 
 // fn(cube, meta): cube is a Float32Array (3 x 128 x 256), the same as Python's
