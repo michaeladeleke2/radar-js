@@ -12,3 +12,7 @@ data/captures/
 test/captures/
 # Python environment with the Infineon SDK, for tools/sdk_capture.py (not committed)
 .venv-sdk/
+
+# Live golden data (tools/make_golden.py --input): over 50 MB in all, as the
+# captures it comes from. Each folder's manifest.json (committed) has the SHA-256 of every file.
+test/golden/live/**/*.npy

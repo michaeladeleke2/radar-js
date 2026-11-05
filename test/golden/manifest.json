@@ -1,6 +1,6 @@
 {
   "generated_by": "tools/make_golden.py",
-  "sensds_commit": "85f0517508c0740175c94f5232c987b663a3f167",
+  "sensds_commit": "f693dd1c0b477a0cf9f0da5d4a008bb998bdc999",
   "numpy": "2.4.3",
   "scipy": "1.17.1",
   "config": {
@@ -259,7 +259,7 @@
             512
           ],
           "dtype": "<f8",
-          "source": "range_map_v1.compute_range_map(data, mode='raw')[0]; (n_frame, n_range_bins)"
+          "source": "range_map_v1.compute_range_map(data, antenna=0, mode='raw')[0]; (n_frame, n_range_bins)"
         },
         "range/profile_mti_f0": {
           "shape": [
@@ -274,7 +274,7 @@
             512
           ],
           "dtype": "<f8",
-          "source": "range_map_v1.compute_range_map(data, mode='mti')[0]; (n_frame, n_range_bins)"
+          "source": "range_map_v1.compute_range_map(data, antenna=0, mode='mti')[0]; (n_frame, n_range_bins)"
         }
       }
     },
@@ -516,7 +516,7 @@
             512
           ],
           "dtype": "<f8",
-          "source": "range_map_v1.compute_range_map(data, mode='raw')[0]; (n_frame, n_range_bins)"
+          "source": "range_map_v1.compute_range_map(data, antenna=0, mode='raw')[0]; (n_frame, n_range_bins)"
         },
         "range/profile_mti_f0": {
           "shape": [
@@ -531,7 +531,7 @@
             512
           ],
           "dtype": "<f8",
-          "source": "range_map_v1.compute_range_map(data, mode='mti')[0]; (n_frame, n_range_bins)"
+          "source": "range_map_v1.compute_range_map(data, antenna=0, mode='mti')[0]; (n_frame, n_range_bins)"
         }
       }
     }

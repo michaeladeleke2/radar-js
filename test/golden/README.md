@@ -13,7 +13,10 @@ The script imports SensDSv2's modules from their files (read only, no
 its shape, dtype and the SensDSv2 function it came from, plus the SensDSv2
 commit, numpy and scipy versions, and the radar configuration.
 
-Generated from SensDSv2 commit `85f0517` with numpy 2.4.3, scipy 1.17.1.
+Generated from SensDSv2 commit `f693dd1` with numpy 2.4.3, scipy 1.17.1. (First
+made from `85f0517`; regenerated from `f693dd1` on 2026-11-05, every `.npy`
+file came out byte-identical, only the source notes in `manifest.json`
+changed.)
 
 ## Inputs
 
@@ -25,6 +28,36 @@ Generated from SensDSv2 commit `85f0517` with numpy 2.4.3, scipy 1.17.1.
 Radar configuration (both inputs): 58.0 to 63.5 GHz, 1 MHz sample rate, 256
 samples per chirp, 128 chirps, chirp repetition 0.3 ms, frame repetition
 0.1 s, 3 receive antennas. Antenna 0 is processed throughout.
+
+## Live inputs (`live/`)
+
+Frames of live radar-js recordings (Chrome, Web Serial, the board on a USB
+hub), made with
+
+```bash
+python3 tools/make_golden.py ~/SensDSv2 --input test/captures/<name>.npy --frames a:b
+```
+
+| Folder | Frames | Scene |
+|---|---|---|
+| `live/hand_gesture/` | 0:50 of `hand_gesture.npy` (600 frames, 0 dropped) | a hand moving toward the radar to 0.3 m and away to 0.6 m |
+| `live/walking/` | 0:50 of `walking.npy` (700 frames, 0 dropped) | a person walking from 3 m to 0.5 m and back |
+| `live/empty_room/` | 100:150 of `empty_room.npy` (579 frames; its one drop is at frame 274) | nothing in front of the radar to 3.5 m |
+
+Each folder: `input.npy`, float32 (50, 3, 128, 256), all three antennas;
+`rx0/` and `rx1/`, every stage below for that antenna. The Doppler and
+range-map functions are called with `antenna=k`; `spectrogram_from_frames`
+always takes antenna 0, so it gets `data[:, k:k+1]`. Antenna 0 clips about
+18% of its samples on this board (a property of the board and scene, the
+same with the Infineon SDK), so antenna 1 is the cleaner check; both are
+kept. `manifest.json` records the SensDSv2 commit, the capture (path, SHA-256,
+frames, conditions, connection, the radar-js commit it was recorded with)
+and the SHA-256 of every file.
+
+The live `.npy` files (112 MB in all) are not committed, as the captures they
+come from are not: the manifests are. `test/golden.test.ts` checks the files
+against those SHA-256 sums and runs every check on them when they are
+present, and skips them (saying so) when they are not, as in CI.
 
 ## Stages
 

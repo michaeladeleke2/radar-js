@@ -1,0 +1,626 @@
+{
+  "generated_by": "tools/make_golden.py --input",
+  "sensds_commit": "f693dd1c0b477a0cf9f0da5d4a008bb998bdc999",
+  "numpy": "2.4.3",
+  "scipy": "1.17.1",
+  "config": {
+    "frame_repetition_time_s": 0.1,
+    "chirp_repetition_time_s": 0.0003,
+    "num_chirps": 128,
+    "tdm_mimo": false,
+    "start_frequency_Hz": 58000000000.0,
+    "end_frequency_Hz": 63500000000.0,
+    "sample_rate_Hz": 1000000.0,
+    "num_samples": 256,
+    "rx_mask": 7,
+    "tx_mask": 1,
+    "tx_power_level": 31,
+    "lp_cutoff_Hz": 500000,
+    "hp_cutoff_Hz": 20000,
+    "if_gain_dB": 33
+  },
+  "source": {
+    "file": "test/captures/walking.npy",
+    "sha256": "08efe612bfbe2630f98ef767a20401a878cfcaa22ed89ad99fddfc1cd4be051e",
+    "frames": [
+      0,
+      50
+    ],
+    "capture_frames": 700,
+    "name": "walking",
+    "conditions": "walking toward the radar from 3 m to 0.5 m and back, repeated, on boresight",
+    "started_at": "2026-11-05T23:10:01.249Z",
+    "connection_type": "USB hub, no other devices",
+    "machine_label": "MacBook Pro M4 (Mac16,1)",
+    "browser": "Google Chrome 156.0.8078.48",
+    "os": "macOS 27.2.0",
+    "board": {
+      "board": "Radar Baseboard MCU7 (MCU B)",
+      "firmware": "2.9.0",
+      "chip": "BGT60TR13C"
+    },
+    "recorded_with_radar_js": {
+      "version": "0.1.0",
+      "commit": "675d411aa7ca",
+      "dirty": false
+    },
+    "frames_dropped": 0
+  },
+  "antennas": [
+    0,
+    1
+  ],
+  "inputs": {
+    "rx0": {
+      "antenna": 0,
+      "description": "frames 0:50 of test/captures/walking.npy, a live radar-js recording (antennas 0, 1 processed); antenna 0",
+      "files": {
+        "doppler/range_window": {
+          "shape": [
+            256
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live._range_doppler_windows",
+          "sha256": "8bdcc34fb368e051086630c33f0b20553847fe97f1ddd0e68ef6865af6007914"
+        },
+        "doppler/doppler_window": {
+          "shape": [
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live._range_doppler_windows",
+          "sha256": "c26b8bb31ea29bcdbc5116240a1b3795eea14cf6f14e064f6798dc34a3427115"
+        },
+        "doppler/range_fft_f0_re": {
+          "shape": [
+            512,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db, range FFT lines; (n_range_bins, n_chirp) (real part)",
+          "sha256": "7baba2cbf068e108b8644ae50c6a6dcc2549439170ea6143da5bff7d8235afb0"
+        },
+        "doppler/range_fft_f0_im": {
+          "shape": [
+            512,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db, range FFT lines; (n_range_bins, n_chirp) (imaginary part)",
+          "sha256": "728aa81c19577536a6af175e5230bc923542261e8d89f59b71e591c5f6dbf4fd"
+        },
+        "doppler/rdm_db_f0": {
+          "shape": [
+            512,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db(frame 0); (n_range_bins, doppler_fft_size)",
+          "sha256": "2e35e87f5857c09940bfdb31da3cfee73a67893f0d6f48475fc251c410a19eab"
+        },
+        "doppler/raw_bins": {
+          "shape": [
+            50
+          ],
+          "dtype": "<i4",
+          "source": "doppler_spectrogram_live.select_range_bin_raw per frame",
+          "sha256": "66358e83c9641a5a8eaad2ab12da4e07ceb8008fe923af078c42a9607e660ec1"
+        },
+        "doppler/range_bins": {
+          "shape": [
+            50
+          ],
+          "dtype": "<i4",
+          "source": "doppler_spectrogram_live.smooth_range_bins(raw_bins, 512)",
+          "sha256": "d98f7e5309fc841ce100f2a44b65842d4e7599b8805f22c3a4546ebf4b1a720e"
+        },
+        "doppler/spectrogram": {
+          "shape": [
+            50,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_recorded(data, antenna=0)[0]; (n_frame, doppler_fft_size)",
+          "sha256": "4587e59ea550d01b5f1e7faaa2ad77cb94be2b4d59afbdb38c76cbd4c3366483"
+        },
+        "doppler/live_history": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "LiveDopplerProcessor(history_length=10).process_frame, history after the last frame",
+          "sha256": "d0cd4f02a891d19bc497625e9df737fd672dbc398cf39aba0994681b07be686e"
+        },
+        "doppler/live_bins": {
+          "shape": [
+            50
+          ],
+          "dtype": "<i4",
+          "source": "LiveDopplerProcessor.process_frame range bin per frame",
+          "sha256": "099039547ac9ec5005da3a3e145b5d5191540a4869de5431f5a50725368131cf"
+        },
+        "stft/range_fft_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 1-3; (256 range rows, first 128 slow-time columns) (real part)",
+          "sha256": "af92685fe3238fd0fefcad781ed15f95a5ea0cfa80e036a1617f6ad1c17c12b9"
+        },
+        "stft/range_fft_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 1-3; (256 range rows, first 128 slow-time columns) (imaginary part)",
+          "sha256": "c14864720281819b655bb68d07e8f8bd8c5beb150b6a928cec8b3860419152a1"
+        },
+        "stft/clutter_removed_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 4; (256, first 128 columns) (real part)",
+          "sha256": "7be82dc80f496258f8439edf6a458e377ff674f6d67960f434d332e75241a70f"
+        },
+        "stft/clutter_removed_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 4; (256, first 128 columns) (imaginary part)",
+          "sha256": "c2d8526bdfaf88f6c30629de38f20b01ccee2ebd52bf5cfe8a50919abf048242"
+        },
+        "stft/mti_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 5, lfilter(_MTI_B, _MTI_A); (256, first 128 columns) (real part)",
+          "sha256": "752fb58b6f23dbb8b38b5a65aecbd838d7abd9488f05293c78ad6a00e71f4f83"
+        },
+        "stft/mti_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 5, lfilter(_MTI_B, _MTI_A); (256, first 128 columns) (imaginary part)",
+          "sha256": "78f68116b86c245475514e651cbba31b68c17b5ce35f0cfd91bf5b8a2312be5a"
+        },
+        "stft/slow_time_mti_re": {
+          "shape": [
+            6400
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=True); (n_chirps,) (real part)",
+          "sha256": "90271ae155094dcbf2e02dd4634f71cc533c3d03fc1b3b5f0133d36d8e281d0f"
+        },
+        "stft/slow_time_mti_im": {
+          "shape": [
+            6400
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=True); (n_chirps,) (imaginary part)",
+          "sha256": "470a089018d0ba23883c13939eec7c2304ffb88f3396ed3ae219cff020086874"
+        },
+        "stft/slow_time_raw_re": {
+          "shape": [
+            6400
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=False); (n_chirps,) (real part)",
+          "sha256": "90dc991010c2febc103a9d9b0c4962329c3b61a1caf82d436807c1c79423378d"
+        },
+        "stft/slow_time_raw_im": {
+          "shape": [
+            6400
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=False); (n_chirps,) (imaginary part)",
+          "sha256": "168c71c9c1f5be9e959547bc2f73c0f82fb780c73582e2330f88e179c65b4c96"
+        },
+        "stft/stft_mti_re": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f8",
+          "source": "processing._stft_hanning(slow_time_mti); (1024, n_cols) (real part)",
+          "sha256": "0013a1be4b75ef719318d758cf894b3e2fa5aad1b0e7b15e1fb1c7edd522e071"
+        },
+        "stft/stft_mti_im": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f8",
+          "source": "processing._stft_hanning(slow_time_mti); (1024, n_cols) (imaginary part)",
+          "sha256": "9e3f5bd383fe3def45db0dacccba2fc126f4a190362f4daa6bd000b0c8addbd6"
+        },
+        "stft/spect_mti": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames(data, mti=True); (1024, n_cols)",
+          "sha256": "b8055954d4df36898c6c8d3d09906fe89ae61594659543a0099e9e7653de3540"
+        },
+        "stft/spect_raw": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames(data, mti=False); (1024, n_cols)",
+          "sha256": "55aba84ab1e5083ddbc0926ae5a30529407ba3d1e2f5a0f780e4f34dff181be0"
+        },
+        "stft/db_mti": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f4",
+          "source": "processing.spectrogram_to_db(spect_mti); (1024, n_cols)",
+          "sha256": "ea1259d3d2516708e9ded8e4f8f72b4e1e73c8e561a1e4069085809b304a56a9"
+        },
+        "stft/mti_b": {
+          "shape": [
+            2
+          ],
+          "dtype": "<f8",
+          "source": "processing._MTI_B = butter(1, 0.01, 'high')",
+          "sha256": "ad7d102de938abbd262f6285b81a2011097947f01057445c548a79b58626d0b7"
+        },
+        "stft/mti_a": {
+          "shape": [
+            2
+          ],
+          "dtype": "<f8",
+          "source": "processing._MTI_A",
+          "sha256": "28f12367577395e14cea3ad5cc95fe10e6149687c084c03507360b7519383839"
+        },
+        "range/range_axis_m": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.range_axis_m(512, 1024, config sample rate and frequencies)",
+          "sha256": "4f266bbdcdbf1f3da252892cef6b456c4df303af1034f59dab0e93b67a0d344e"
+        },
+        "range/profile_raw_f0": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.frame_profile(frame 0, mode='raw'); (n_range_bins,)",
+          "sha256": "491c0fb1a556b888955b4f998253aa27aa36844c284312124e947e84e2aa146e"
+        },
+        "range/map_raw": {
+          "shape": [
+            50,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.compute_range_map(data, antenna=0, mode='raw')[0]; (n_frame, n_range_bins)",
+          "sha256": "e7184b769d8b9eebf46c3c7d0dab5713cb56f9f8ff1a52f05d3537830ba247ab"
+        },
+        "range/profile_mti_f0": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.frame_profile(frame 0, mode='mti'); (n_range_bins,)",
+          "sha256": "d843da96a67862b05b84139da8d9643247d0bcce27b6a494854761b3f994688a"
+        },
+        "range/map_mti": {
+          "shape": [
+            50,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.compute_range_map(data, antenna=0, mode='mti')[0]; (n_frame, n_range_bins)",
+          "sha256": "d08606a0d51852e14bba406e80c271dbc741bc43d55cb0c10304bb0200aec179"
+        }
+      }
+    },
+    "rx1": {
+      "antenna": 1,
+      "description": "frames 0:50 of test/captures/walking.npy, a live radar-js recording (antennas 0, 1 processed); antenna 1",
+      "files": {
+        "doppler/range_window": {
+          "shape": [
+            256
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live._range_doppler_windows",
+          "sha256": "8bdcc34fb368e051086630c33f0b20553847fe97f1ddd0e68ef6865af6007914"
+        },
+        "doppler/doppler_window": {
+          "shape": [
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live._range_doppler_windows",
+          "sha256": "c26b8bb31ea29bcdbc5116240a1b3795eea14cf6f14e064f6798dc34a3427115"
+        },
+        "doppler/range_fft_f0_re": {
+          "shape": [
+            512,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db, range FFT lines; (n_range_bins, n_chirp) (real part)",
+          "sha256": "0a92f4255c77f9490602e1609197f0abf8d2764c0e8b43cc0f3f2d9e0a6b6661"
+        },
+        "doppler/range_fft_f0_im": {
+          "shape": [
+            512,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db, range FFT lines; (n_range_bins, n_chirp) (imaginary part)",
+          "sha256": "3980bd2177f1e3ff59ae4a9575a418644f0f6ce20bd3d959a4346613bb22d087"
+        },
+        "doppler/rdm_db_f0": {
+          "shape": [
+            512,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_rdm_db(frame 0); (n_range_bins, doppler_fft_size)",
+          "sha256": "66d3d337ee4ad37d705f77cf0136bf9f253d60a01bc2c40602cfc7cf2c3bc835"
+        },
+        "doppler/raw_bins": {
+          "shape": [
+            50
+          ],
+          "dtype": "<i4",
+          "source": "doppler_spectrogram_live.select_range_bin_raw per frame",
+          "sha256": "f8740f52d049fb4c16d06b5c6c27786e659e6aad0632b1b63cf9a0e98f57a72c"
+        },
+        "doppler/range_bins": {
+          "shape": [
+            50
+          ],
+          "dtype": "<i4",
+          "source": "doppler_spectrogram_live.smooth_range_bins(raw_bins, 512)",
+          "sha256": "5cf8e0bc0ee4a89d6e020970d01d139d5017f018aa099d4b9ac32c5d9d57b223"
+        },
+        "doppler/spectrogram": {
+          "shape": [
+            50,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "doppler_spectrogram_live.compute_recorded(data, antenna=1)[0]; (n_frame, doppler_fft_size)",
+          "sha256": "edeaa78d89703ff0ada847e4ec50a14960f8566984448bf401bc572b7008a132"
+        },
+        "doppler/live_history": {
+          "shape": [
+            10,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "LiveDopplerProcessor(history_length=10).process_frame, history after the last frame",
+          "sha256": "15e1eb6c211fc349fcc95409147aca88519393426b33aa6a41e7ede756f52c3f"
+        },
+        "doppler/live_bins": {
+          "shape": [
+            50
+          ],
+          "dtype": "<i4",
+          "source": "LiveDopplerProcessor.process_frame range bin per frame",
+          "sha256": "72cd8054361cd7e9c9629f526e92dcb8143c4e89800522b8162a8cb7de91077e"
+        },
+        "stft/range_fft_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 1-3; (256 range rows, first 128 slow-time columns) (real part)",
+          "sha256": "0693af2416c817466993c300be26ff1868822a156363cf19582a00a154695a9b"
+        },
+        "stft/range_fft_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 1-3; (256 range rows, first 128 slow-time columns) (imaginary part)",
+          "sha256": "385de9156557e4fcaa10bae00477b4017f95ccc8acafe7be29ac78a9743b2538"
+        },
+        "stft/clutter_removed_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 4; (256, first 128 columns) (real part)",
+          "sha256": "606120faab76a33e6e5fb0dd5a8504a42ec3e65a1e572931fa0437b7e8ea3f0c"
+        },
+        "stft/clutter_removed_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 4; (256, first 128 columns) (imaginary part)",
+          "sha256": "7af8936297c0a786d053c9f070d35940ee8b7fef9c699f74135413f9b7ae7cd7"
+        },
+        "stft/mti_re": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 5, lfilter(_MTI_B, _MTI_A); (256, first 128 columns) (real part)",
+          "sha256": "9155a67cbd85ae97c1258a028e1bc6701ae62400c50c60d94bbcd3403645c003"
+        },
+        "stft/mti_im": {
+          "shape": [
+            256,
+            128
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames step 5, lfilter(_MTI_B, _MTI_A); (256, first 128 columns) (imaginary part)",
+          "sha256": "7cd0817417317a4c1d85124d99273a39499027c9af00d80b4487740e3be424fc"
+        },
+        "stft/slow_time_mti_re": {
+          "shape": [
+            6400
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=True); (n_chirps,) (real part)",
+          "sha256": "5c3c1f0ae4a8466159d0718019e45d89cfafd187331010a2ffc7ea24fe7f9e6b"
+        },
+        "stft/slow_time_mti_im": {
+          "shape": [
+            6400
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=True); (n_chirps,) (imaginary part)",
+          "sha256": "d3f0c1372cf8c2040465c311bd22a97628ac0a1923965460a74609d1e7facab4"
+        },
+        "stft/slow_time_raw_re": {
+          "shape": [
+            6400
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=False); (n_chirps,) (real part)",
+          "sha256": "645a90b62fa5a2cae6d4fd0a6fdcf050bfd6a977b0c128a7abdc7792c4d7759d"
+        },
+        "stft/slow_time_raw_im": {
+          "shape": [
+            6400
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames steps 6-7 (mti=False); (n_chirps,) (imaginary part)",
+          "sha256": "3a50338fde409dd450868fa45d4a0f926533092acb28e5807161959cc53af85f"
+        },
+        "stft/stft_mti_re": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f8",
+          "source": "processing._stft_hanning(slow_time_mti); (1024, n_cols) (real part)",
+          "sha256": "b110daef3189e771f9002e2ad33cf1861ff8a41097b9cf53cb3f561a4824fdd5"
+        },
+        "stft/stft_mti_im": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f8",
+          "source": "processing._stft_hanning(slow_time_mti); (1024, n_cols) (imaginary part)",
+          "sha256": "eb79a02d6e8f924224e5c4f1252aa876ce8a9e38f55ea54415d5dc704379ecf7"
+        },
+        "stft/spect_mti": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames(data, mti=True); (1024, n_cols)",
+          "sha256": "4685e7e271166a8a876a010792627e66710a5887e0d32c79c81de0fc6e6df346"
+        },
+        "stft/spect_raw": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f8",
+          "source": "processing.spectrogram_from_frames(data, mti=False); (1024, n_cols)",
+          "sha256": "d774048a7f1379f5d7876cdf0132f9fc7cf5e77ca73858b979aad27863933a2a"
+        },
+        "stft/db_mti": {
+          "shape": [
+            1024,
+            109
+          ],
+          "dtype": "<f4",
+          "source": "processing.spectrogram_to_db(spect_mti); (1024, n_cols)",
+          "sha256": "3ed8f1986db672a88013f7b807ee7c8828a039b6fa977be98125f7b47c4835e2"
+        },
+        "stft/mti_b": {
+          "shape": [
+            2
+          ],
+          "dtype": "<f8",
+          "source": "processing._MTI_B = butter(1, 0.01, 'high')",
+          "sha256": "ad7d102de938abbd262f6285b81a2011097947f01057445c548a79b58626d0b7"
+        },
+        "stft/mti_a": {
+          "shape": [
+            2
+          ],
+          "dtype": "<f8",
+          "source": "processing._MTI_A",
+          "sha256": "28f12367577395e14cea3ad5cc95fe10e6149687c084c03507360b7519383839"
+        },
+        "range/range_axis_m": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.range_axis_m(512, 1024, config sample rate and frequencies)",
+          "sha256": "4f266bbdcdbf1f3da252892cef6b456c4df303af1034f59dab0e93b67a0d344e"
+        },
+        "range/profile_raw_f0": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.frame_profile(frame 0, mode='raw'); (n_range_bins,)",
+          "sha256": "fe8231c47913ab19a6d9c7d38a6a5a1c3cf9701e2168294470c6109118a27e3f"
+        },
+        "range/map_raw": {
+          "shape": [
+            50,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.compute_range_map(data, antenna=1, mode='raw')[0]; (n_frame, n_range_bins)",
+          "sha256": "c7f9c6da269561d4a453da788c48b682d4c13614ead39ed103817c49c4dabfdf"
+        },
+        "range/profile_mti_f0": {
+          "shape": [
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.frame_profile(frame 0, mode='mti'); (n_range_bins,)",
+          "sha256": "3db0903245236eed9e1593dc4b870716b989f6aa3c4e6669eb4923d8bd7ad408"
+        },
+        "range/map_mti": {
+          "shape": [
+            50,
+            512
+          ],
+          "dtype": "<f8",
+          "source": "range_map_v1.compute_range_map(data, antenna=1, mode='mti')[0]; (n_frame, n_range_bins)",
+          "sha256": "b35194e2ba6f270119c9095f59554ddb87e85f0c5d2287022809560520d52d32"
+        }
+      }
+    }
+  },
+  "input_file": {
+    "shape": [
+      50,
+      3,
+      128,
+      256
+    ],
+    "dtype": "<f4",
+    "source": "frames 0:50 of test/captures/walking.npy, a live radar-js recording (antennas 0, 1 processed); (n_frame, n_rx, n_chirp, n_sample)",
+    "sha256": "799fd0c4c543fee0973ba2fcd95720a645699b444d0b8c9f5dcbcc0ce04fa004"
+  }
+}

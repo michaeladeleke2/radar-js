@@ -11,7 +11,8 @@
 
 import { test, afterAll } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 import radar from '../src/index.ts';
 import { parseNpy } from '../src/data/npy.js';
@@ -22,8 +23,8 @@ const TOL = { COEF: 1e-12, REL: 1e-9, DB: 1e-8 };
 const report: string[] = [];
 
 type Arr = { data: ArrayLike<number>; shape: number[] };
-const load = (input: string, name: string): Arr => {
-  const b = readFileSync(new URL(`${input}/${name}.npy`, GOLDEN));
+const load = (dir: string, name: string): Arr => {
+  const b = readFileSync(new URL(`${dir}/${name}.npy`, GOLDEN));
   return parseNpy(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
 };
 const flat = (x: ArrayLike<number> | ArrayLike<number>[]): number[] =>
@@ -50,11 +51,45 @@ test('the golden data was made with the configuration radar.js uses', () => {
   for (const [k, v] of Object.entries(manifest.config)) assert.equal((config as Record<string, unknown>)[k], v, k);
 });
 
-for (const input of ['real', 'synthetic']) {
-  const data = load(input, 'input');
+// Live golden data (tools/make_golden.py --input): frames of live radar-js
+// recordings, stages for antennas 0 and 1 in live/<name>/rx<k>/. The .npy
+// files are not committed (over 50 MB); each folder's manifest.json is, with
+// the SHA-256 of every file. Without the files these checks are skipped.
+const LIVE = new URL('live/', GOLDEN);
+const liveNames = existsSync(LIVE) ? readdirSync(LIVE).filter(n => existsSync(new URL(`${n}/manifest.json`, LIVE))).sort() : [];
+const liveManifest = (name: string) => JSON.parse(readFileSync(new URL(`${name}/manifest.json`, LIVE), 'utf8'));
+const liveHere = (name: string) => existsSync(new URL(`${name}/input.npy`, LIVE));
+const sha256 = (url: URL) => createHash('sha256').update(readFileSync(url)).digest('hex');
+
+type Suite = { input: string; inputDir: string; antenna: number };
+const suites: Suite[] = [
+  { input: 'real', inputDir: 'real', antenna: 0 },
+  { input: 'synthetic', inputDir: 'synthetic', antenna: 0 },
+];
+for (const name of liveNames) {
+  const m = liveManifest(name);
+  test(`live/${name}: made with the configuration radar.js uses, from SensDSv2 ${m.sensds_commit.slice(0, 7)}`, () => {
+    for (const [k, v] of Object.entries(m.config)) assert.equal((config as Record<string, unknown>)[k], v, k);
+  });
+  if (!liveHere(name)) {
+    test.skip(`live/${name}: golden files not here (not committed; tools/make_golden.py --input makes them)`, () => {});
+    report.push(`skip  live/${name}: golden .npy files not present`);
+    continue;
+  }
+  test(`live/${name}: files match the SHA-256 in its manifest`, () => {
+    assert.equal(sha256(new URL(`${name}/input.npy`, LIVE)), m.input_file.sha256, 'input.npy');
+    for (const [rx, entry] of Object.entries(m.inputs) as [string, { files: Record<string, { sha256: string }> }][])
+      for (const [f, info] of Object.entries(entry.files)) assert.equal(sha256(new URL(`${name}/${rx}/${f}.npy`, LIVE)), info.sha256, `${rx}/${f}`);
+  });
+  for (const k of m.antennas as number[]) suites.push({ input: `live/${name}/rx${k}`, inputDir: `live/${name}`, antenna: k });
+}
+
+for (const { input, inputDir, antenna } of suites) {
+  const data = load(inputDir, 'input');
   const recording = { data: data.data, shape: data.shape as [number, number, number, number] };
-  const nFrame = data.shape[0];
-  const antenna0 = (i: number) => ({ data: (data.data as Float32Array).subarray((i * 3) * 128 * 256, (i * 3 + 1) * 128 * 256), shape: [128, 256] as [number, number] });
+  const nFrame = data.shape[0], nRx = data.shape[1];
+  // one frame of the suite's antenna (antenna 0 for real/ and synthetic/)
+  const antenna0 = (i: number) => ({ data: (data.data as Float32Array).subarray((i * nRx + antenna) * 128 * 256, (i * nRx + antenna + 1) * 128 * 256), shape: [128, 256] as [number, number] });
 
   // ---------- Doppler spectrogram ----------
   test(`${input}: windows`, () => {
@@ -83,7 +118,7 @@ for (const input of ['real', 'synthetic']) {
   });
 
   test(`${input}: dopplerSpectrogram`, () => {
-    const { spectrogram, rangeBins } = radar.dsp.dopplerSpectrogram(recording);
+    const { spectrogram, rangeBins } = radar.dsp.dopplerSpectrogram(recording, { antenna });
     compare(`${input} dopplerSpectrogram`, spectrogram, load(input, 'doppler/spectrogram'), 'DB');
     compare(`${input} dopplerSpectrogram rangeBins`, rangeBins, load(input, 'doppler/range_bins'), 'EXACT');
   });
@@ -119,12 +154,12 @@ for (const input of ['real', 'synthetic']) {
   for (const mti of [true, false]) {
     const tag = mti ? 'mti' : 'raw';
     test(`${input}: slowTimeSignal (${tag})`, () => {
-      const { re, im } = radar.dsp.slowTimeSignal(recording, { mti });
+      const { re, im } = radar.dsp.slowTimeSignal(recording, { mti, antenna });
       compare(`${input} slowTimeSignal ${tag} re`, re, load(input, `stft/slow_time_${tag}_re`), 'REL');
       compare(`${input} slowTimeSignal ${tag} im`, im, load(input, `stft/slow_time_${tag}_im`), 'REL');
     });
     test(`${input}: stftSpectrogram (${tag})`, () => {
-      compare(`${input} stftSpectrogram ${tag}`, radar.dsp.stftSpectrogram(recording, { mti }), load(input, `stft/spect_${tag}`), 'REL');
+      compare(`${input} stftSpectrogram ${tag}`, radar.dsp.stftSpectrogram(recording, { mti, antenna }), load(input, `stft/spect_${tag}`), 'REL');
     });
   }
 
@@ -138,7 +173,7 @@ for (const input of ['real', 'synthetic']) {
   test(`${input}: spectrogramToDb`, () => {
     const spect = load(input, 'stft/spect_mti');
     compare(`${input} spectrogramToDb (golden spectrogram in)`, radar.dsp.spectrogramToDb({ data: spect.data, shape: spect.shape as [number, number] }), load(input, 'stft/db_mti'), 'EXACT');
-    compare(`${input} spectrogramToDb(stftSpectrogram) end to end`, radar.dsp.spectrogramToDb(radar.dsp.stftSpectrogram(recording)), load(input, 'stft/db_mti'), 'EXACT');
+    compare(`${input} spectrogramToDb(stftSpectrogram) end to end`, radar.dsp.spectrogramToDb(radar.dsp.stftSpectrogram(recording, { antenna })), load(input, 'stft/db_mti'), 'EXACT');
   });
 
   // ---------- Range map ----------
@@ -149,7 +184,7 @@ for (const input of ['real', 'synthetic']) {
   for (const mode of ['raw', 'mti'] as const) {
     test(`${input}: rangeProfile and rangeMap (${mode})`, () => {
       compare(`${input} rangeProfile ${mode} (frame 0)`, radar.dsp.rangeProfile(antenna0(0), { mode }), load(input, `range/profile_${mode}_f0`), 'DB');
-      compare(`${input} rangeMap ${mode}`, radar.dsp.rangeMap(recording, { mode }), load(input, `range/map_${mode}`), 'DB');
+      compare(`${input} rangeMap ${mode}`, radar.dsp.rangeMap(recording, { mode, antenna }), load(input, `range/map_${mode}`), 'DB');
     });
   }
 }

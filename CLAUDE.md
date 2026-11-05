@@ -35,6 +35,12 @@ DSP output must match SensDSv2's Python output.
   for range bins and the float32 dB image, 1e-12 for windows/coefficients/axes,
   1e-9 of the peak after FFTs, 1e-8 dB for dB values. It prints the measured
   worst case of every check.
+- Live golden data: `make_golden.py ~/SensDSv2 --input test/captures/<name>.npy
+  --frames a:b` writes `test/golden/live/<name>/` (all stages for antennas 0
+  and 1; SensDSv2 commit, capture SHA-256 and conditions in its manifest).
+  Its `.npy` files are not committed (over 50 MB, like the captures); the
+  manifests are, with every file's SHA-256, and `golden.test.ts` runs the
+  live checks when the files are present and skips them otherwise.
 - A new DSP function gets golden data (extend `make_golden.py`) and a golden
   test before it is called done. If a golden test fails, fix radar.js, not the
   golden data, unless the golden script itself is wrong; then say so.
