@@ -8,7 +8,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
-import { FakeBoard } from './fake_board.js';
+import { FakeBoard, withCrc } from './fake_board.js';
 import { PacketParser } from '../src/device/link.js';
 
 const FRAME_BYTES = 147456;
@@ -103,7 +103,9 @@ test('packet parser: stream offsets of packets, across a sync loss and a clear',
   const seen: { offset: number }[] = [];
   const lost: number[] = [];
   const parser = new PacketParser({ onControl: () => {}, onData: p => seen.push(p), onSyncLost: (_h, o) => lost.push(o) });
-  const pkt = (len: number) => [0xD0, 0, 0, 0, len & 0xFF, len >> 8, ...new Array(len).fill(1), 0, 0];
+  // whole packets with a valid CRC, as the board sends (after a sync loss the
+  // parser only resynchronises on a packet whose CRC passes)
+  const pkt = (len: number) => Array.from(withCrc([0xD0, 0, 0, 0, len & 0xFF, len >> 8, ...new Array(len).fill(1)]));
   parser.push(Uint8Array.from(pkt(10)));                 // 18 bytes at 0
   parser.push(Uint8Array.from([0x11, 0x22, 0x33, 0x44, 0x55]));   // junk at 18: sync lost, 5 bytes dropped
   parser.push(Uint8Array.from(pkt(4)));                  // 12 bytes at 23

@@ -10,6 +10,8 @@ export const withCrc = bytes => { const c = crc16(bytes); return Uint8Array.from
 export class FakeBoard {
   constructor(frameBytes) {
     this.frameBytes = frameBytes;
+    this.junkBeforeReply = null;   // radar-js resync test: bytes to put in front of replies
+    this.junkRepliesLeft = 0;
     this.requests = [];
     this.counter = 0x1234;
     this.inbox = [];
@@ -45,7 +47,10 @@ export class FakeBoard {
       payload = [];
       for (let i = 0; i < r.payload.length; i += 4) payload.push(0x03, 0x03, 0x00, 0x00);
     }
-    this.send(withCrc([r.type, 0, payload.length & 0xFF, payload.length >> 8, ...payload]));
+    // junkBeforeReply: bytes sent just in front of the next replies in the same
+    // chunk, as when a link lost bytes and the parser is out of step
+    const junk = this.junkBeforeReply && this.junkRepliesLeft-- > 0 ? this.junkBeforeReply : [];
+    this.send([...junk, ...withCrc([r.type, 0, payload.length & 0xFF, payload.length >> 8, ...payload])]);
     // The trigger word (MAIN with FRAME_START) starts the radar: stream one frame.
     if (r.type === 0x40 && r.req === 0x20 && r.wIndex === 0x0130) {
       const last = r.payload.subarray(r.payload.length - 4);

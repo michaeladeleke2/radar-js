@@ -71,11 +71,31 @@ export class ByteQueue {
   }
   peek(i) { return this.buf[this.start + i]; }
   take(n) { const out = this.buf.slice(this.start, this.start + n); this.start += n; if (this.start === this.end) this.start = this.end = 0; return out; }
+  // radar-js: drop n bytes without copying them (resynchronisation)
+  skip(n) { this.start += n; if (this.start >= this.end) this.start = this.end = 0; }
+  // radar-js: bytes [i, i + n) without copying
+  view(i, n) { return this.buf.subarray(this.start + i, this.start + i + n); }
   clear() { this.start = this.end = 0; }
 }
 
+// radar-js: the longest payloads a valid packet can carry (SERIAL_MAX_PACKET_SIZE)
+const MAX_DATA_PAYLOAD = MAX_PACKET_SIZE - DATA_HEADER_SIZE - CRC_SIZE;
+const MAX_RESPONSE_PAYLOAD = MAX_PACKET_SIZE - RESPONSE_HEADER_SIZE - CRC_SIZE;
+
 // Splits the byte stream into packets. Pure logic, no I/O, so it can be tested.
 // onControl(packet) and onData(packet) receive whole packets with the CRC checked.
+//
+// radar-js change, resynchronisation: BridgeSerial, on an unknown packet
+// start, drops everything buffered and starts again at the next bytes that
+// arrive. Bytes lost on the link leave the parser in the middle of a packet,
+// and each drop then threw away whole chunks of the stream, including the
+// board's replies to the commands that restart the acquisition (each lost
+// reply cost a 1 s timeout; docs/soak-test-2026-11-06.md). Here the parser
+// instead looks through the buffered bytes for the next packet start, and
+// accepts it only once the whole packet is there and its CRC passes, so
+// payload bytes that look like a header cannot be taken for one. A header
+// with a length no valid packet has is treated the same way. Without a
+// loss, packets are parsed exactly as before.
 export class PacketParser {
   constructor({ onControl, onData, onSyncLost }) {
     this.queue = new ByteQueue();
@@ -83,20 +103,97 @@ export class PacketParser {
     this.onData = onData;
     this.onSyncLost = onSyncLost;
     this.offset = 0;   // radar-js: stream position of the queue's first byte (bytes pushed and consumed so far)
+    this.resyncing = false;   // radar-js: looking for a verified packet start after a sync loss
+    this.resyncSkipped = 0;   // radar-js: bytes passed over while resynchronising (diagnostics)
+    this.undecided = [];        // radar-js: while resynchronising, stream positions whose packet is not complete yet
+    this.scanned = 0;         // radar-js: while resynchronising, stream position up to which every start was looked at
   }
 
-  // radar-js: drop what is buffered, keeping the stream position
-  clear() { this.offset += this.queue.length; this.queue.clear(); }
+  // radar-js: drop what is buffered, keeping the stream position. As in
+  // BridgeSerial (input cleared before a command), the next bytes are taken
+  // as a packet start.
+  clear() { this.offset += this.queue.length; this.queue.clear(); this.resyncing = false; this.undecided = []; this.scanned = 0; }
+
+  // radar-js: an unknown or impossible packet start at the head: report it
+  // (as before), then resynchronise from the next byte
+  _lose() {
+    const q = this.queue, offset = this.offset;
+    const head = q.view(0, Math.min(4, q.length)).slice();   // reported as before; only the first byte is passed over,
+    q.skip(1); this.offset += 1; this.resyncSkipped += 1;    // so a packet starting 1 to 3 bytes later is still found
+    this.resyncing = true; this.undecided = []; this.scanned = this.offset;
+    if (this.onSyncLost) this.onSyncLost(head, offset);
+  }
+
+  // radar-js: the length of a whole packet starting at queue position i, if
+  // its header could start one; 0 if it cannot; -1 if more bytes are needed to tell
+  _packetLength(i) {
+    const q = this.queue, left = q.length - i;
+    if (left < 4) return -1;
+    const type = q.peek(i);
+    if ((type & 0xF0) === DATA_FRAME_PACKET) {
+      if (left < DATA_HEADER_SIZE) return -1;
+      const wLength = q.peek(i + 4) | (q.peek(i + 5) << 8);
+      return wLength <= MAX_DATA_PAYLOAD ? DATA_HEADER_SIZE + wLength + CRC_SIZE : 0;
+    }
+    if (isControlType(type)) {
+      const wLength = q.peek(i + 2) | (q.peek(i + 3) << 8);
+      return wLength <= MAX_RESPONSE_PAYLOAD ? RESPONSE_HEADER_SIZE + wLength + CRC_SIZE : 0;
+    }
+    return 0;
+  }
+
+  // radar-js: move the head to the first position where a whole packet with
+  // a good CRC starts. A position whose packet is not complete yet is kept
+  // and checked again as bytes arrive, but does not hold up a later position
+  // whose packet is complete and verified (a header that claims more bytes
+  // than follow it before a verified packet was payload, not a packet), so a
+  // reply that ends the stream is never stuck behind bytes that only look
+  // like a header. Returns true when the head is on a verified packet; false
+  // when more bytes are needed (bytes before the first undecided position
+  // are dropped).
+  _resync() {
+    const q = this.queue;
+    const accept = abs => {
+      const i = abs - this.offset;
+      q.skip(i); this.offset += i; this.resyncSkipped += i;
+      this.resyncing = false; this.undecided = []; this.scanned = 0;
+      return true;
+    };
+    if (!this.undecided) this.undecided = [];
+    if (this.scanned < this.offset) this.scanned = this.offset;
+    // earlier undecided positions first, in order
+    const still = [];
+    for (const abs of this.undecided) {
+      const i = abs - this.offset, total = this._packetLength(i);
+      if (q.length - i < total) { still.push(abs); continue; }        // not complete yet
+      if (crc16(q.view(i, total)) === 0) return accept(abs);
+    }
+    this.undecided = still;
+    // then the positions not looked at yet
+    for (;;) {
+      const i = this.scanned - this.offset, total = this._packetLength(i);
+      if (total < 0) break;                                              // header not complete yet
+      const abs = this.scanned++;
+      if (total === 0) continue;                                         // cannot start a packet
+      if (q.length - i < total) { this.undecided.push(abs); continue; }  // undecided
+      if (crc16(q.view(i, total)) === 0) return accept(abs);
+    }
+    const drop = (this.undecided.length ? this.undecided[0] : this.scanned) - this.offset;
+    q.skip(drop); this.offset += drop; this.resyncSkipped += drop;
+    return false;
+  }
 
   push(bytes) {
     this.queue.push(bytes);
     const q = this.queue;
     for (;;) {
+      if (this.resyncing && !this._resync()) return;
       if (q.length < 4) return;
       const type = q.peek(0);
       if ((type & 0xF0) === DATA_FRAME_PACKET) {
         if (q.length < DATA_HEADER_SIZE) return;
         const wLength = q.peek(4) | (q.peek(5) << 8);
+        if (wLength > MAX_DATA_PAYLOAD) { this._lose(); continue; }   // radar-js: no valid packet is this long
         const total = DATA_HEADER_SIZE + wLength + CRC_SIZE;
         if (q.length < total) return;
         const offset = this.offset;
@@ -112,6 +209,7 @@ export class PacketParser {
         });
       } else if (isControlType(type)) {
         const wLength = q.peek(2) | (q.peek(3) << 8);
+        if (wLength > MAX_RESPONSE_PAYLOAD) { this._lose(); continue; }   // radar-js: no valid packet is this long
         const total = RESPONSE_HEADER_SIZE + wLength + CRC_SIZE;
         if (q.length < total) return;
         const raw = q.take(total);
@@ -125,13 +223,9 @@ export class PacketParser {
         });
       } else {
         // BridgeSerial::readPacketStart: unknown packet type, synchronization lost.
-        // The SDK marks the link for resynchronisation and clears the input
-        // buffer before the next command; we drop what is buffered now.
-        const offset = this.offset;
-        const head = q.take(Math.min(4, q.length));
-        this.clear();
-        this.offset += head.length;
-        if (this.onSyncLost) this.onSyncLost(head, offset);
+        // The SDK then clears the input buffer; radar-js resynchronises on the
+        // next verified packet instead (see above).
+        this._lose();
       }
     }
   }

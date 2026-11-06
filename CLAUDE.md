@@ -139,6 +139,24 @@ Keep this list current when a copied file has to change.
   2026-11-05 for the CRC-error drops seen with radar-js and not the SDK;
   `test/loss_trace.test.ts` (the fake board's `cut` option: bytes lost or
   sent twice).
+- `src/device/link.js`: resynchronisation (2026-11-06). On a sync loss
+  BridgeSerial drops everything buffered; `PacketParser` instead looks
+  through the buffered bytes for the next packet start and accepts it only
+  when the whole packet is there and its CRC passes (a header in payload
+  bytes is not taken for one; an undecided position does not hold up a later
+  verified packet, so a reply that ends the stream is not stuck). A header
+  with a length no packet has (over `SERIAL_MAX_PACKET_SIZE`) is a sync loss
+  too, not a 64 kB wait. One sync loss is reported per place the stream was
+  out of step (it was one per dropped chunk). `clear()` still takes the next
+  bytes as a packet start, as BridgeSerial does before a command. Without a
+  loss, parsing is unchanged. Why: the soak test
+  (`docs/soak-test-2026-11-06.md`) showed most missing frames were 1 s reply
+  timeouts in the restart, the replies thrown away with the buffer.
+  `test/resync.test.ts` (fake headers in payload, a fake long header before a
+  final reply, a corrupt packet, an impossible length, a session whose
+  restart replies come behind misaligned bytes: the fake board's
+  `junkBeforeReply`). `test/loss_trace.test.ts`'s offsets test now builds
+  its packets with valid CRCs (its expected results are unchanged).
 - `src/viz/image.js`: `historyToPlotData` reverses the Doppler rows, so the
   most positive velocity is drawn at the top beside the +max label. SensDSv2's
   figure (and the sensds-web copy) draws toward-the-radar at the top, against
@@ -146,7 +164,8 @@ Keep this list current when a copied file has to change.
   compares `makeImage` with matplotlib using SensDSv2's unreversed data.
 - `test/fake_board.js`: the simulated board, moved out of `device.test.js`
   and taught the board-info request, several frames per trigger, a lost
-  packet (`lose`) and lost or repeated bytes sent in set chunk sizes (`cut`).
+  packet (`lose`), lost or repeated bytes sent in set chunk sizes (`cut`),
+  and junk bytes in front of its replies (`junkBeforeReply`).
 
 Not from sensds-web (new ports, no copied file changed):
 
