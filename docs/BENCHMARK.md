@@ -70,6 +70,14 @@ Reading the live results:
   13 against 9 ms): with less to do the processor runs at a lower clock.
   Compare modes with that in mind.
 
+- Animation-frame stalls (main thread vs Web Worker): report them against
+  each display's own refresh interval, as `raf.csv` / `raf_table.tex` do
+  (gaps over 1.5 x the median interval, and over 33 ms). The page's own
+  "over 16.7 ms" count is not comparable across machines: on a 60 Hz display
+  16.7 ms is the normal interval, so about half of the ordinary gaps land
+  just over it, while on a 120 Hz display (8.3 ms) it already means a missed
+  frame. Add `--expect-commit bc27418` when aggregating the paper's results.
+
 Timer resolution: Chrome rounds `performance.now()` to 0.1 ms on pages that
 are not cross-origin isolated (GitHub Pages cannot send the headers for
 isolation), so single calls under a few milliseconds carry that rounding;
@@ -89,7 +97,8 @@ python3 tools/plot_bench.py results/aggregate/plot_data.json --font-dir <folder 
 ```
 
 `results/aggregate/` then holds `combined.csv`, LaTeX table bodies
-(`specs_table.tex`, `stages_table.tex`, `live_table.tex`), `plot_data.json`,
+(`specs_table.tex`, `stages_table.tex`, `live_table.tex`, `raf_table.tex`),
+`raf.csv`, `plot_data.json`,
 and two grayscale figures: `bench_stages.pdf` (time per stage by machine) and
 `bench_scaling.pdf` (time against frame size).
 

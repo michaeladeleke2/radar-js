@@ -12,6 +12,14 @@
 //   specs_table.tex     LaTeX table body: machine, CPU, cores, RAM, OS, Chrome
 //   stages_table.tex    LaTeX table body: replay stages, mean (SD) ms per machine
 //   live_table.tex      LaTeX table body: live modes per machine (if present)
+//   raf.csv, raf_table.tex  main thread vs worker: animation-frame stalls,
+//                       counted against each display's own refresh interval
+//                       (the median rAF interval: 8.3 ms at 120 Hz, 16.7 ms
+//                       at 60 Hz) as gaps over 1.5 x that interval, and gaps
+//                       over 33 ms; from the raw intervals in each file. (The
+//                       page's own "over 16.7 ms" count is not comparable
+//                       across displays: on a 60 Hz display about half of the
+//                       normal intervals land just over 16.7 ms.)
 //   plot_data.json      data for tools/plot_bench.py
 // A machine with several files: the newest file of each section is used.
 
@@ -102,6 +110,24 @@ if (list.some(m => m.live)) {
   writeFileSync(join(out, 'live_table.tex'), '% Machine & Mode & Frames & Processing & Rendering & Arrival to output (ms) & Delay slope (ms/s) & Real time\n' + lr.join('\n') + '\n');
 }
 
+// animation-frame stalls, from the raw intervals
+const rafRows = [['machine', 'mode', 'display_interval_ms', 'display_hz', 'intervals', 'over_1_5x_display', 'over_1_5x_display_pct', 'over_33_ms', 'over_33_ms_pct']];
+const rafTex = [];
+for (const m of list) for (const mode of ['main', 'worker']) {
+  const iv = m.threads?.[mode]?.raw?.raf_intervals_ms;
+  if (!iv?.length) continue;
+  const sorted = [...iv].sort((a, b) => a - b), n = sorted.length;
+  const med = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+  const over15 = iv.filter(x => x > 1.5 * med).length, over33 = iv.filter(x => x > 33).length;
+  const pct = k => +(100 * k / n).toFixed(1);
+  rafRows.push([m.label, mode, +med.toFixed(2), Math.round(1000 / med), n, over15, pct(over15), over33, pct(over33)]);
+  rafTex.push(`${tex(m.label)} & ${mode === 'main' ? 'main thread' : 'Web Worker'} & ${Math.round(1000 / med)} & ${pct(over15).toFixed(1)}\\% & ${pct(over33).toFixed(1)}\\% \\\\`);
+}
+if (rafTex.length) {
+  writeFileSync(join(out, 'raf.csv'), rafRows.map(r => r.join(',')).join('\n') + '\n');
+  writeFileSync(join(out, 'raf_table.tex'), '% Machine & Processing & Display (Hz) & rAF gaps over 1.5x the display interval & over 33 ms (share of intervals)\n' + rafTex.join('\n') + '\n');
+}
+
 // plot data
 const plot = {
   machines: list.map(m => m.label),
@@ -111,5 +137,5 @@ const plot = {
 writeFileSync(join(out, 'plot_data.json'), JSON.stringify(plot, null, 1));
 if (expectCommit) writeFileSync(join(out, 'flags.txt'), flags.length ? flags.join('\n') + '\n' : `all files report commit ${expectCommit}\n`);
 for (const fl of flags) console.log(`FLAG ${fl}`);
-console.log(`${list.length} machine(s): ${list.map(m => `${m.label} (${m.files.length} file(s), commit ${[...m.commits].join(', ')})`).join(', ')}\nwrote ${out}/combined.csv, specs_table.tex, stages_table.tex${list.some(m => m.live) ? ', live_table.tex' : ''}, plot_data.json`);
+console.log(`${list.length} machine(s): ${list.map(m => `${m.label} (${m.files.length} file(s), commit ${[...m.commits].join(', ')})`).join(', ')}\nwrote ${out}/combined.csv, specs_table.tex, stages_table.tex${list.some(m => m.live) ? ', live_table.tex' : ''}${rafTex.length ? ', raf.csv, raf_table.tex' : ''}, plot_data.json`);
 if (flags.length) process.exit(1);
