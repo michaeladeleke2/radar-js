@@ -158,10 +158,13 @@ input('npyFile').onchange = async () => {
 
 // ---------- plot ----------
 const canvas = $('benchPlot') as HTMLCanvasElement;
+let currentPlot: InstanceType<typeof radar.viz.LiveSpectrogramPlot> | null = null;
+new ResizeObserver(() => currentPlot?.redraw()).observe(canvas);   // redraw at the new size, as the demo does
 function newPlot(nChirp = CONFIG.num_chirps) {
   const config = { ...CONFIG, num_chirps: nChirp };
   const plot = new radar.viz.LiveSpectrogramPlot(canvas, { historyLength: HISTORY_FRAMES, maxSpeed: -radar.dsp.velocityAxis(config)[0], jetVmin: JET_VMIN, title: 'Doppler Spectrogram (benchmark)' });
   plot.drawEmpty();
+  currentPlot = plot;
   return plot;
 }
 const canvasSize = () => ({ css: [canvas.clientWidth, canvas.clientHeight], pixels: [canvas.width, canvas.height] });
