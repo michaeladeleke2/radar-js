@@ -353,7 +353,10 @@ const pageEvents: (PageState & { t_ms: number; event: string })[] = [{ t_ms: now
 const pageEvent = (event: string, over: Partial<PageState> = {}) => pageEvents.push({ t_ms: nowMs(), event, ...pageNow(), ...over });
 for (const ev of ['visibilitychange', 'pagehide', 'pageshow', 'freeze', 'resume']) document.addEventListener(ev, () => pageEvent(ev));
 window.addEventListener('focus', () => pageEvent('focus', { focus: true }));
-window.addEventListener('blur', () => pageEvent('blur', { focus: false }));
+window.addEventListener('blur', () => {
+  pageEvent('blur', { focus: false });
+  if (liveRecording || datasetBusy) status(BACKGROUND_WARNING);   // the page cannot draw over other apps; the status line says it on return
+});
 $('pausePlot').addEventListener('change', () => pageEvent(plotPaused() ? 'plot_paused' : 'plot_resumed'));
 /** The page state at time t (performance.now ms), from the timeline, and how long it had held. */
 function pageAt(t: number) {
@@ -361,6 +364,31 @@ function pageAt(t: number) {
   for (const e of pageEvents) { if (e.t_ms <= t) s = e; else break; }
   return { visibility: s.visibility, focus: s.focus, plot_paused: s.plot_paused, since_ms: +(t - s.t_ms).toFixed(1), last_event: s.event };
 }
+/**
+ * The page state over [t0, t1]: at both ends, the time not focused and
+ * hidden, how often focus was lost, and the events. Saved with every
+ * recording: the radar loses about 5 times more data while Chrome is not
+ * the front app (docs/soak-test-2026-11-06.md).
+ */
+function pageOver(t0: number, t1: number) {
+  let notFocused = 0, hidden = 0;
+  let s = pageAt(t0), t = t0;
+  const during = pageEvents.filter(e => e.t_ms > t0 && e.t_ms <= t1);
+  for (const e of [...during, { t_ms: t1 } as { t_ms: number }]) {
+    if (!s.focus) notFocused += e.t_ms - t;
+    if (s.visibility === 'hidden') hidden += e.t_ms - t;
+    if ('event' in e) s = { ...s, visibility: (e as typeof pageEvents[0]).visibility, focus: (e as typeof pageEvents[0]).focus };
+    t = e.t_ms;
+  }
+  return {
+    at_start: pageAt(t0), at_end: pageAt(t1),
+    not_focused_s: +(notFocused / 1000).toFixed(1), hidden_s: +(hidden / 1000).toFixed(1),
+    focus_losses: during.filter(e => e.event === 'blur').length, events: during,
+  };
+}
+const BACKGROUND_WARNING = 'Keep this window in front while recording: the radar loses more data when Chrome is in the background.';
+const inFront = () => document.hasFocus() && document.visibilityState === 'visible';
+
 // One run per Start: frames received, the board-clock span (firmware
 // timestamps, us), every board-clock gap over 115 ms (a realignment) and
 // every arrival gap over 150 ms (a late delivery), each with the page state.
@@ -461,7 +489,7 @@ button('liveRecBtn').onclick = async () => {
   liveRecording = true; renderLive();
   pollLoss(); phase = 'recording';
   const sessionAtStart = radar.stats();          // frames and drops since Start, when this recording began
-  liveRecorder.onProgress = (n, t) => { $('liveRecInfo').textContent = `Recording ${name}: ${t.toFixed(1)} of ${seconds} s, ${n} frames`; };
+  liveRecorder.onProgress = (n, t) => { $('liveRecInfo').textContent = `Recording ${name}: ${t.toFixed(1)} of ${seconds} s, ${n} frames${inFront() ? '' : ' — ' + BACKGROUND_WARNING}`; };
   try {
     const result = await liveRecorder.start(seconds, CONFIG.frame_repetition_time_s);
     liveRecorder.onProgress = null;
@@ -495,6 +523,7 @@ button('liveRecBtn').onclick = async () => {
     meta.loss_during_recording = tally(eventsBetween(result.startMs, recEnd));
     meta.loss_traces = sessionLog.loss_traces.filter(x => (x.t_ms as number) >= result.startMs && (x.t_ms as number) <= recEnd);
     meta.radar_stopped_while_saving = stopForSave;
+    meta.page = pageOver(result.startMs, recEnd);   // focus and visibility during the recording
     const rec = radar.data.fromFrames(result.frames, FRAME_SHAPE);
     await sink.write(`${name}.npy`, radar.data.saveNpy(rec));
     await sink.write(`${name}.timing.json`, new Blob([JSON.stringify(meta, null, 1)], { type: 'application/json' }));
@@ -505,7 +534,8 @@ button('liveRecBtn').onclick = async () => {
     phase = 'idle';
     if (stopForSave) { await radar.start(); }
     const ok = Math.abs(result.frames.length - result.expected) <= 2 && result.dropped === 0 && result.restarts === 0;
-    $('liveRecInfo').textContent = `${ok ? 'Saved' : 'Saved, check it:'} ${name}.npy and ${name}.timing.json — ${result.frames.length} of ${result.expected} frames, ${result.dropped} dropped, ${result.restarts} restarts`;
+    const away = (meta.page as { not_focused_s: number }).not_focused_s;
+    $('liveRecInfo').textContent = `${ok ? 'Saved' : 'Saved, check it:'} ${name}.npy and ${name}.timing.json — ${result.frames.length} of ${result.expected} frames, ${result.dropped} dropped, ${result.restarts} restarts${away ? `; Chrome was not in front for ${away} s` : ''}`;
     status(`Saved ${name} (${result.frames.length} frames).`);
   } catch (err) {
     $('liveRecInfo').textContent = `Not saved: ${(err as Error).message}`;
@@ -552,7 +582,7 @@ button('dsRecordBtn').onclick = async () => {
   try {
     for (const n of ['3', '2', '1']) { overlay(n); status(`Get ready: ${label} at ${distance} m`); await sleep(1000); }
     overlay('GO');
-    clipRecorder.onProgress = (_n, t) => { overlay(`${Math.max(0, seconds - t).toFixed(1)} s`); };
+    clipRecorder.onProgress = (_n, t) => { overlay(`${Math.max(0, seconds - t).toFixed(1)} s`); if (!inFront()) status(BACKGROUND_WARNING); };
     const result = await clipRecorder.start(seconds, CONFIG.frame_repetition_time_s);
     clipRecorder.onProgress = null;
     overlay('Saving…');
@@ -561,6 +591,7 @@ button('dsRecordBtn').onclick = async () => {
       type: 'dataset', file: `${stem}.npy`, capture: result, config: CONFIG, shape: FRAME_SHAPE,
       board: radar.boardInfo(), device: await radar.capture.deviceInfo(deviceName()), label, distance_m: distance, notes,
     });
+    (meta as Record<string, unknown>).page = pageOver(result.startMs, performance.now());   // focus and visibility during the clip
     await radar.capture.saveCapture(sink, stem, result.frames, FRAME_SHAPE, meta);
     lastClip = stem;
     counts.set(key(label, distance), (counts.get(key(label, distance)) ?? 0) + 1);
