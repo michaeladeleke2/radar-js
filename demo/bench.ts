@@ -312,7 +312,7 @@ async function runThreads(status: (s: string) => void) {
   const { data, nFrames, nChirp, nSample } = clip;
   const per = nChirp * nSample;
   const frame = (i: number) => data.subarray((i % nFrames) * per, (i % nFrames + 1) * per);
-  const out: Record<string, unknown> = { seconds, rate_fps: 1000 / FRAME_MS, definitions: {
+  const out: Record<string, unknown> = { seconds, rate_fps: 1000 / FRAME_MS, canvas: canvasSize(), definitions: {
     raf: 'intervals between requestAnimationFrame callbacks during the run (60 Hz display: 16.7 ms)',
     processing_ms: 'main thread: LiveSpectrogram.processFrame on the page',
     round_trip_ms: 'worker: push of a frame to radar.stream.LiveSpectrogramWorker -> its result back on the page',
@@ -476,7 +476,7 @@ async function runLiveMode(mode: LiveMode, seconds: number, status: (s: string) 
 
 async function runLive(status: (s: string) => void) {
   const { seconds } = runSettings();
-  const out: Record<string, unknown> = { seconds_per_mode: seconds, antenna: ANTENNA, definitions: {
+  const out: Record<string, unknown> = { seconds_per_mode: seconds, antenna: ANTENNA, canvas: canvasSize(), definitions: {
     processing_ms: 'main thread: LiveSpectrogram.processFrame on the page; worker: the same inside radar.bench.TimedSpectrogramWorker (in-worker time)',
     rendering_ms: 'LiveSpectrogramPlot.draw of that frame\'s result, right after it is ready',
     arrival_to_output_ms: 'radar.onFrame delivery -> result ready (plot off) or drawn (plot on)',
