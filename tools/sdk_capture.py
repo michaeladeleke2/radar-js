@@ -41,7 +41,7 @@ def sensds_build_config():
     return mod.build_config()
 
 
-def radar_js_build():
+def radar_js_build(tool="tools/sdk_capture.py"):
     """The radar-js commit these tools ran from (read from .git, as make_golden.py reads SensDSv2's)."""
     git = ROOT / ".git"
     try:
@@ -54,9 +54,9 @@ def radar_js_build():
         import subprocess
         dirty = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--untracked-files=no"],
                                capture_output=True, text=True).stdout.strip() != ""
-        return {"commit": commit[:12] if commit else None, "dirty": dirty, "tool": "tools/sdk_capture.py"}
+        return {"commit": commit[:12] if commit else None, "dirty": dirty, "tool": tool}
     except OSError:
-        return {"commit": None, "dirty": None, "tool": "tools/sdk_capture.py"}
+        return {"commit": None, "dirty": None, "tool": tool}
 
 
 def config_dict(cfg):

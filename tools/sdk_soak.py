@@ -88,7 +88,7 @@ def main():
         "config": config_dict(cfg), "chirp_time_s": cfg.chirp_repetition_time_s,
         "sdk": {"version": ifxradarsdk.get_version_full(), "sensor": sensor},
         "host": {"python": platform.python_version(), "os": f"{platform.system()} {platform.mac_ver()[0] or platform.release()}"},
-        "radar_js": radar_js_build(),
+        "radar_js": radar_js_build("tools/sdk_soak.py"),
     }
     path = OUT / f"{args.name}.sdk_soak.json"
     path.write_text(json.dumps(report, indent=1))
