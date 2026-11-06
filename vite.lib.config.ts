@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
     define: { ...buildDefine(), ...(iife ? { 'import.meta.url': '__radarScriptUrl' } : {}) },
     build: {
       outDir: 'dist-lib',
+      target: 'chrome89',   // runs on Chrome 89 (a benchmark Chromebook); tools/check_chrome89.mjs
       emptyOutDir: !iife,
       lib: { entry: iife ? 'src/iife.ts' : 'src/index.ts', name: 'radar', formats: [iife ? 'iife' : 'es'], fileName: () => (iife ? 'radar.iife.js' : 'radar.js') },
       rolldownOptions: iife ? { output: { exports: 'default', banner: "var __radarScriptUrl = (typeof document !== 'undefined' && document.currentScript && document.currentScript.src) || (typeof location !== 'undefined' ? location.href : '');" } } : {},

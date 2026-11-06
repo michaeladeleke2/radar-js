@@ -88,6 +88,11 @@ DSP output must match SensDSv2's Python output.
 - Strata-derived files keep their `STRATA DERIVED` header (see LICENSING.md).
 - npm, Node 22 (CI). `npm test` (Vitest, `test/`), `npm run build` (typecheck +
   demo), `npm run build:lib` (dist-lib/radar.js and radar.iife.js).
+- Chrome 89 is the oldest browser supported (a benchmark Chromebook cannot
+  update past it): both Vite builds target `chrome89`, and
+  `node tools/check_chrome89.mjs` checks `dist/` and `dist-lib/` for newer
+  syntax and runtime APIs. No CSS newer than Chrome 89 either (`:has()`,
+  container queries, nesting, `color-mix()`, subgrid).
 - Small logical commits. Pushing to `main` deploys the demo (docs/DEPLOY.md).
 
 ## Changes from the sensds-web originals
@@ -157,6 +162,11 @@ Keep this list current when a copied file has to change.
   restart replies come behind misaligned bytes: the fake board's
   `junkBeforeReply`). `test/loss_trace.test.ts`'s offsets test now builds
   its packets with valid CRCs (its expected results are unchanged).
+- `src/device/link.js`, `session.js`: Web Serial buffer fallback
+  (2026-11-06, for a Chrome 89 Chromebook). `Link.open` asks for 16 MiB and,
+  if the browser rejects that size with a TypeError, tries 8, 4, 1 MiB, 256
+  and 64 KiB (`BUFFER_SIZES`); `link.bufferSize` is the size used,
+  `radarStats().serialBufferSize` reports it. `test/serial_open.test.ts`.
 - `src/viz/image.js`: `historyToPlotData` reverses the Doppler rows, so the
   most positive velocity is drawn at the top beside the +max label. SensDSv2's
   figure (and the sensds-web copy) draws toward-the-radar at the top, against

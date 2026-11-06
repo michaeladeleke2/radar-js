@@ -89,7 +89,9 @@ export const radar = {
    * Since the last start: { frames, drops, restarts, diagnostics, lossTraces }.
    * diagnostics counts why data was lost; lossTraces (the last 100) places
    * each CRC error and sync loss in the byte stream against the read() chunks:
-   * bytes_missing, gap_window, gap_inside_one_chunk.
+   * bytes_missing, gap_window, gap_inside_one_chunk. serialBufferSize: the
+   * Web Serial receive buffer the port was opened with (16 MiB, or less in a
+   * browser that caps it).
    */
   stats: radarStats,
   /** True in browsers with Web Serial (Chrome, Edge on a computer). */

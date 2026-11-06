@@ -30,6 +30,8 @@ const COMMAND_HEADER_SIZE = 8;
 const RESPONSE_HEADER_SIZE = 4;
 const DATA_HEADER_SIZE = 6;
 const CRC_SIZE = 2;
+// radar-js: receive buffer sizes tried in order (Link.open)
+export const BUFFER_SIZES = [16 * 1024 * 1024, 8 * 1024 * 1024, 4 * 1024 * 1024, 1024 * 1024, 256 * 1024, 64 * 1024];
 // radar-js: loss trace sizes (read() chunks remembered, traces kept, chunks listed per trace)
 const CHUNK_HISTORY = 512, TRACE_LIMIT = 100, TRACE_LAST_CHUNKS = 20;
 // radar-js: stream bytes kept for the trace, bytes looked at past a bad packet, and of those saved as hex
@@ -373,8 +375,22 @@ export class Link {
   async open(baudRate) {
     // The largest receive buffer Chrome allows (16 MiB, about 11 s of radar
     // data): if the page is busy for a moment, data waits here instead of the
-    // board's own buffer overflowing.
-    await this.port.open({ baudRate, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none', bufferSize: 16 * 1024 * 1024 });
+    // board's own buffer overflowing. radar-js: a browser that caps the size
+    // lower rejects it with a TypeError; then the next smaller size is tried
+    // (for Chrome 89, on a benchmark Chromebook). The size used is bufferSize.
+    let lastError = null;
+    this.bufferSize = null;
+    for (const size of BUFFER_SIZES) {
+      try {
+        await this.port.open({ baudRate, dataBits: 8, stopBits: 1, parity: 'none', flowControl: 'none', bufferSize: size });
+        this.bufferSize = size;
+        break;
+      } catch (e) {
+        if (!(e instanceof TypeError)) throw e;   // port busy, gone, ...: not a size problem
+        lastError = e;
+      }
+    }
+    if (this.bufferSize === null) throw lastError;
     this.closed = false;
     this.reader = this.port.readable.getReader();
     this.writer = this.port.writable.getWriter();
