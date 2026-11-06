@@ -85,13 +85,26 @@ node tools/aggregate_bench.mjs results/
 ```
 
 ```bash
-python3 tools/plot_bench.py results/aggregate/plot_data.json
+python3 tools/plot_bench.py results/aggregate/plot_data.json --font-dir <folder with the Libertine .ttf files>
 ```
 
 `results/aggregate/` then holds `combined.csv`, LaTeX table bodies
 (`specs_table.tex`, `stages_table.tex`, `live_table.tex`), `plot_data.json`,
 and two grayscale figures: `bench_stages.pdf` (time per stage by machine) and
 `bench_scaling.pdf` (time against frame size).
+
+Fonts: the paper may embed only Linux Libertine and Linux Biolinum, so the
+figures set all text, axis tick labels included, in Linux Libertine (the
+regular face), and `plot_bench.py` stops if any other font ends up embedded
+(check with `pdffonts bench_stages.pdf`). The font is not in the repository.
+It is the Libertine Open Fonts Project's TrueType release 5.3.0,
+`LinLibertineTTF_5.3.0_2012_07_02.tgz` (3,673,659 bytes, SHA-256
+`24a593a949808d976850131a953c0c0d7a72299531dfbb348191964cc038d75d`), from
+https://sourceforge.net/projects/linuxlibertine/files/linuxlibertine/5.3.0/;
+unpack it anywhere and pass that folder as `--font-dir`. Licence: SIL Open
+Font License 1.1, and also GPL with the font exception (`LICENCE.txt`,
+`OFL-1.1.txt` and `GPL.txt` in the archive), so embedding the font in the
+paper's PDF is allowed.
 
 ## Running the page locally
 
