@@ -1,7 +1,11 @@
 // Combine benchmark result files (demo/bench.html downloads) from several
 // machines into tables and plot data for the paper.
 //
-//   node tools/aggregate_bench.mjs <folder of radarjs-bench_*.json> [--out <folder>]
+//   node tools/aggregate_bench.mjs <folder of radarjs-bench_*.json> [--out <folder>] [--expect-commit <sha>]
+//
+// --expect-commit: every result file must report that radar-js commit (a
+// prefix is enough) from a clean build; any that does not is flagged, listed
+// in flags.txt, and the exit code is 1 (the tables are still written).
 //
 // Writes (default <folder>/aggregate/):
 //   combined.csv        every summary row of every machine
@@ -18,6 +22,8 @@ const args = process.argv.slice(2);
 const dir = args.find(a => !a.startsWith('--'));
 if (!dir) { console.error('usage: node tools/aggregate_bench.mjs <folder> [--out <folder>]'); process.exit(2); }
 const out = args.includes('--out') ? args[args.indexOf('--out') + 1] : join(dir, 'aggregate');
+const expectCommit = args.includes('--expect-commit') ? args[args.indexOf('--expect-commit') + 1] : null;
+const flags = [];
 mkdirSync(out, { recursive: true });
 
 const tex = s => String(s ?? '').replace(/\\/g, '\\textbackslash{}').replace(/([&%$#_{}])/g, '\\$1').replace(/~/g, '\\textasciitilde{}');
@@ -30,8 +36,11 @@ for (const f of readdirSync(dir).filter(f => f.endsWith('.json')).sort()) {
   try { r = JSON.parse(readFileSync(join(dir, f), 'utf8')); } catch { continue; }
   if (r.format !== 'radar-js-benchmark') continue;
   const label = r.system?.machine_label || f;
-  const m = machines.get(label) ?? { label, system: r.system, files: [] };
-  m.files.push(f);
+  const commit = r.system?.radar_js_commit ?? r.radar_js?.commit ?? null, dirty = r.system?.radar_js_dirty ?? r.radar_js?.dirty ?? null;
+  if (expectCommit && (!commit || !commit.startsWith(expectCommit.slice(0, Math.min(expectCommit.length, commit.length))) || commit.length < 7 || dirty))
+    flags.push(`${f} (${label}): radar-js commit ${commit ?? 'missing'}${dirty ? ' with uncommitted changes' : ''}, expected ${expectCommit}`);
+  const m = machines.get(label) ?? { label, system: r.system, files: [], commits: new Set() };
+  m.files.push(f); m.commits.add(`${commit}${dirty ? '+dirty' : ''}`);
   for (const k of ['replay', 'scaling', 'threads', 'live']) if (r[k]) m[k] = r[k];
   if (r.system) m.system = r.system;
   machines.set(label, m);
@@ -40,8 +49,8 @@ const list = [...machines.values()];
 if (!list.length) { console.error(`no benchmark results in ${dir}`); process.exit(1); }
 
 // combined CSV
-const rows = [['machine', 'section', 'test', 'size', 'mode', 'n', 'mean_ms', 'sd_ms', 'median_ms', 'p5_ms', 'p95_ms', 'min_ms', 'max_ms']];
-const push = (m, section, test, size, mode, s) => rows.push([m.label, section, test, size, mode, s.n, s.mean, s.sd, s.median, s.p5, s.p95, s.min, s.max]);
+const rows = [['machine', 'radar_js_commit', 'section', 'test', 'size', 'mode', 'n', 'mean_ms', 'sd_ms', 'median_ms', 'p5_ms', 'p95_ms', 'min_ms', 'max_ms']];
+const push = (m, section, test, size, mode, s) => rows.push([m.label, [...m.commits].join(' '), section, test, size, mode, s.n, s.mean, s.sd, s.median, s.p5, s.p95, s.min, s.max]);
 for (const m of list) {
   if (m.replay) {
     const size = m.replay.frame_shape.join('x');
@@ -100,4 +109,7 @@ const plot = {
   scaling: Object.fromEntries(list.filter(m => m.scaling).map(m => [m.label, Object.fromEntries(['rangeFft', 'rangeDopplerMap', 'full live pipeline'].map(t => [t, m.scaling.sizes.map(r => ({ size: `${r.chirps}x${r.samples}`, samples_per_frame: r.chirps * r.samples, mean: r[t].stats.mean, sd: r[t].stats.sd }))]))])),
 };
 writeFileSync(join(out, 'plot_data.json'), JSON.stringify(plot, null, 1));
-console.log(`${list.length} machine(s): ${list.map(m => `${m.label} (${m.files.length} file(s))`).join(', ')}\nwrote ${out}/combined.csv, specs_table.tex, stages_table.tex${list.some(m => m.live) ? ', live_table.tex' : ''}, plot_data.json`);
+if (expectCommit) writeFileSync(join(out, 'flags.txt'), flags.length ? flags.join('\n') + '\n' : `all files report commit ${expectCommit}\n`);
+for (const fl of flags) console.log(`FLAG ${fl}`);
+console.log(`${list.length} machine(s): ${list.map(m => `${m.label} (${m.files.length} file(s), commit ${[...m.commits].join(', ')})`).join(', ')}\nwrote ${out}/combined.csv, specs_table.tex, stages_table.tex${list.some(m => m.live) ? ', live_table.tex' : ''}, plot_data.json`);
+if (flags.length) process.exit(1);
