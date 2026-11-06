@@ -156,6 +156,8 @@ button('stopBtn').onclick = async () => {
 radar.onFrame((cube: Float32Array, meta: FrameMeta) => {
   if (!usesBoard(mode)) return;
   const t = performance.now();                 // arrival time, read first thing in the callback
+  soakFrame(meta, t);                          // page-state logging (soak test)
+  if (sessionLog.loss_traces.length < 10000) collectTraces();   // frames keep coming while timers are throttled
   liveRecorder.push(cube, t, meta);
   clipRecorder.push(cube, t, meta);
   benchRecorder.push(cube, t, meta);
@@ -337,6 +339,67 @@ let phase: Phase = 'idle';
 const sessionLog = { started_ms: performance.now(), events: [] as Record<string, unknown>[], saves: [] as Record<string, unknown>[], loss_traces: [] as Record<string, unknown>[] };
 const seenTraces = new Set<string>();   // a reconnect makes a new link, whose trace numbers start again
 let lastDiag: Record<string, number> | null = null, lastDrops = 0, lastFrames = 0;
+
+// ---------- Page state (USB soak test, 2026-11-06): logging only ----------
+// When the page is hidden or loses focus, and the page state at every loss,
+// realignment gap and late frame, for the question whether a background or
+// covered Chrome loses data. Timers are throttled in hidden pages, so the
+// state at a loss comes from this timeline and the loss's own time, not from
+// when pollLoss saw it.
+const nowMs = () => +performance.now().toFixed(1);
+type PageState = { visibility: DocumentVisibilityState; focus: boolean; plot_paused: boolean };
+const pageNow = (): PageState => ({ visibility: document.visibilityState, focus: document.hasFocus(), plot_paused: plotPaused() });
+const pageEvents: (PageState & { t_ms: number; event: string })[] = [{ t_ms: nowMs(), event: 'page_load', ...pageNow() }];
+const pageEvent = (event: string, over: Partial<PageState> = {}) => pageEvents.push({ t_ms: nowMs(), event, ...pageNow(), ...over });
+for (const ev of ['visibilitychange', 'pagehide', 'pageshow', 'freeze', 'resume']) document.addEventListener(ev, () => pageEvent(ev));
+window.addEventListener('focus', () => pageEvent('focus', { focus: true }));
+window.addEventListener('blur', () => pageEvent('blur', { focus: false }));
+$('pausePlot').addEventListener('change', () => pageEvent(plotPaused() ? 'plot_paused' : 'plot_resumed'));
+/** The page state at time t (performance.now ms), from the timeline, and how long it had held. */
+function pageAt(t: number) {
+  let s = pageEvents[0];
+  for (const e of pageEvents) { if (e.t_ms <= t) s = e; else break; }
+  return { visibility: s.visibility, focus: s.focus, plot_paused: s.plot_paused, since_ms: +(t - s.t_ms).toFixed(1), last_event: s.event };
+}
+// One run per Start: frames received, the board-clock span (firmware
+// timestamps, us), every board-clock gap over 115 ms (a realignment) and
+// every arrival gap over 150 ms (a late delivery), each with the page state.
+type Run = { started_ms: number; frames: number; first_fw: number | null; last_fw: number | null; normal_steps: number; normal_sum_ms: number;
+  last_arrival: number | null; last_index: number; realignments: Record<string, unknown>[]; late_arrivals: Record<string, unknown>[] };
+const runs: Run[] = [];
+function soakFrame(meta: FrameMeta, t: number) {
+  let run = runs[runs.length - 1];
+  if (!run || meta.index <= run.last_index) {
+    run = { started_ms: +t.toFixed(1), frames: 0, first_fw: null, last_fw: null, normal_steps: 0, normal_sum_ms: 0, last_arrival: null, last_index: -1, realignments: [], late_arrivals: [] };
+    runs.push(run);
+  }
+  run.frames++; run.last_index = meta.index;
+  if (meta.timestamp !== null) {
+    if (run.last_fw !== null) {
+      const gap = (meta.timestamp - run.last_fw) / 1000;
+      if (gap > 115) run.realignments.push({ t_ms: +t.toFixed(1), frame: meta.index, board_gap_ms: +gap.toFixed(1), page: pageAt(t) });
+      else { run.normal_steps++; run.normal_sum_ms += gap; }
+    } else run.first_fw = meta.timestamp;
+    run.last_fw = meta.timestamp;
+  }
+  if (run.last_arrival !== null && t - run.last_arrival > 150) run.late_arrivals.push({ t_ms: +t.toFixed(1), frame: meta.index, arrival_gap_ms: +(t - run.last_arrival).toFixed(1), page: pageAt(t) });
+  run.last_arrival = t;
+}
+const runSummary = (r: Run) => {
+  const period = r.normal_steps ? r.normal_sum_ms / r.normal_steps : 100;
+  const expected = r.first_fw !== null && r.last_fw !== null ? Math.round((r.last_fw - r.first_fw) / 1000 / period) + 1 : null;
+  const { last_arrival, last_index, normal_sum_ms, ...rest } = r;
+  return { ...rest, board_period_ms: +period.toFixed(4), expected_frames: expected, frames_missing: expected === null ? null : expected - r.frames,
+    board_span_s: r.first_fw !== null && r.last_fw !== null ? +((r.last_fw - r.first_fw) / 1e6).toFixed(3) : null };
+};
+
+function collectTraces() {
+  for (const tr of (radar.stats().lossTraces ?? []) as Record<string, unknown>[]) {
+    const key = `${tr.t_ms}:${tr.seq}`;
+    if (!seenTraces.has(key)) { seenTraces.add(key); sessionLog.loss_traces.push({ phase, page: pageAt(tr.t_ms as number), ...tr }); }
+  }
+}
+
 function pollLoss() {
   const st = radar.stats();
   const d = st.diagnostics as Record<string, number> | null;
@@ -349,13 +412,12 @@ function pollLoss() {
     const changes: Record<string, number> = {};
     for (const k of Object.keys(d)) if (d[k] !== lastDiag[k]) changes[k] = d[k] - lastDiag[k];
     if (st.drops !== lastDrops) changes.drops = st.drops - lastDrops;
-    if (Object.keys(changes).length) sessionLog.events.push({ t_ms: +performance.now().toFixed(1), frame: st.frames, phase, ...changes });
+    // seen_page: the state when this poll ran (polls are throttled while hidden;
+    // each trace's own page state is in loss_traces)
+    if (Object.keys(changes).length) sessionLog.events.push({ t_ms: nowMs(), frame: st.frames, phase, seen_page: pageNow(), ...changes });
   }
   lastDiag = { ...d }; lastDrops = st.drops;
-  for (const tr of (st.lossTraces ?? []) as Record<string, unknown>[]) {
-    const key = `${tr.t_ms}:${tr.seq}`;
-    if (!seenTraces.has(key)) { seenTraces.add(key); sessionLog.loss_traces.push({ phase, ...tr }); }
-  }
+  collectTraces();
 }
 setInterval(pollLoss, 100);
 const eventsBetween = (t0: number, t1: number) => sessionLog.events.filter(e => (e.t_ms as number) >= t0 && (e.t_ms as number) <= t1);
@@ -374,6 +436,7 @@ button('sessionLogBtn').onclick = async () => {
     session: { frames_since_start: st.frames, drops_since_start: st.drops, restarts_since_start: st.restarts, loss_diagnostics: st.diagnostics },
     totals_by_phase: { idle: tally(sessionLog.events.filter(e => e.phase === 'idle')), recording: tally(sessionLog.events.filter(e => e.phase === 'recording')), saving: tally(sessionLog.events.filter(e => e.phase === 'saving')) },
     saves: sessionLog.saves, events: sessionLog.events, loss_traces: sessionLog.loss_traces,
+    page_events: pageEvents, runs: runs.map(runSummary), page_at_save: pageNow(),
     long_tasks: longTasks.map(x => ({ t_ms: +x.t.toFixed(1), ms: +x.ms.toFixed(1) })),
   };
   await sink.write(`${name}.session.json`, new Blob([JSON.stringify(body, null, 1)], { type: 'application/json' }));
