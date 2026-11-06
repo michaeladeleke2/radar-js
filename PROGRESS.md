@@ -199,6 +199,33 @@ Results in `docs/verification-summary.md`; capture checksums in
 - Fixed: the Live recorder counted no restarts (`98c02a9`).
 - Open items: `docs/verification-summary.md` section 6.
 
+## 2026-11-06: soak test, faster recovery, benchmark page (branches eval/live-verification, eval/benchmarks)
+
+- **Soak test** (`docs/soak-test-2026-11-06.md`): the USB losses happen
+  between the board and Chrome (bytes missing before the page reads them),
+  about 5 times more often when Chrome is not the front app; the SDK lost
+  none. Most missing frames were 1 s reply timeouts while restarting.
+- **Faster recovery** (`9166ee3`): after a sync loss the parser resynchronises
+  on the next packet whose CRC passes instead of dropping its buffer. Frames
+  missing fell from 6.6% to 0.09% (Chrome in front) and from 10.1% to 0.75%
+  (covered); realignments take 0.12-0.16 s. The demo saves the page's focus
+  and visibility with every recording and warns when Chrome is not in front
+  (`4f5c951`). Merged into main and deployed (`4c870cb`).
+- **Chrome 89** (`f43b5cb`, for a benchmark Chromebook): both builds target
+  chrome89, `tools/check_chrome89.mjs` checks the output (nothing newer
+  found), and the Web Serial buffer falls back from 16 MiB if a browser
+  rejects it.
+- **Benchmark page** `demo/bench.html` (`ceb9422`): replay of every
+  radar.dsp stage and the full live pipeline on a bundled clip (6.55 MB),
+  scaling 32x64 to 256x512, main thread vs worker, and a live test in four
+  modes with the delay's slope over time; JSON and CSV results.
+  `tools/aggregate_bench.mjs`, `tools/plot_bench.py`, `docs/BENCHMARK.md`.
+  Both demo pages share one layout (`93e38dd`).
+- **MacBook Pro M4, Chrome 156** (first full run): full live pipeline 19.2 ms
+  per frame (processing 7.6, drawing 11.6 at 1728 x 864 px), real-time margin
+  5.2x; all four live modes kept up (600 of 600 frames, delay slope 0.06 ms/s,
+  the clock difference). Results in `test/captures/bench/` (not committed).
+
 ## Next
 
 0. From the verification (`docs/verification-summary.md` section 6): the USB

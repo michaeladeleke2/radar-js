@@ -60,6 +60,16 @@ the browser could not do.
 | Main thread vs Web Worker | The full pipeline at 10 frames/s for 60 s, on the page and through radar.stream's Web Worker | requestAnimationFrame intervals (how many over 16.7 and 33 ms), worker round trip, processing and drawing time |
 | Live | The board over Web Serial, four modes | per frame: arrival, processing, rendering, arrival to output; frames delivered vs expected (board clock), drops, realignment gaps; the delay's slope over time (a growing slope means the laptop falls behind live and frames pile up); whether it sustained 10 frames/s in real time |
 
+Reading the live results:
+
+- The delay slope has a floor of about 0.06 ms/s even when nothing falls
+  behind: the board's clock and the computer's run at slightly different
+  rates (about 60 ppm on the MacBook). A laptop that cannot keep up shows a
+  slope of whole milliseconds per second; the verdict uses 1 ms/s.
+- Processing per frame can be slower with the plot off than on (MacBook:
+  13 against 9 ms): with less to do the processor runs at a lower clock.
+  Compare modes with that in mind.
+
 Timer resolution: Chrome rounds `performance.now()` to 0.1 ms on pages that
 are not cross-origin isolated (GitHub Pages cannot send the headers for
 isolation), so single calls under a few milliseconds carry that rounding;
