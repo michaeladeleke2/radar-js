@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>radar.js benchmark</title>
+<link rel="icon" href="./favicon.png">
+<style>
+  :root {
+    --bg: #f3f6fa; --panel: #ffffff; --border: #e3e9f1; --input-bg: #f8fafc; --input-border: #d4dce7;
+    --text: #0f2340; --subtext: #4a5b73; --faint: #7a889c; --accent: #1766c2; --tab-hover: #eef3f9;
+    --divider: #edf1f6; --on-accent: #ffffff; --ok: #1f9d55; --bad: #c53030;
+    --shadow: 0 1px 2px rgba(15, 35, 64, 0.06), 0 4px 14px rgba(15, 35, 64, 0.06);
+    --radius: 12px; --radius-sm: 8px;
+    --mono: Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; min-height: 100vh; }
+  header { padding: 20px 24px 14px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  h1 { margin: 0; font-size: 22px; }
+  h1 .js { color: var(--accent); }
+  .tagline { margin: 4px 0 0; color: var(--subtext); }
+  main { padding: 16px; display: flex; flex-direction: column; gap: 16px; max-width: 1200px; }
+  section.card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  h2 { margin: 0; font-size: 16px; }
+  .hint { font-size: 12px; color: var(--faint); margin: 0; }
+  .note { font-size: 13px; color: var(--bad); margin: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--subtext); }
+  .field input, .field select { font: inherit; font-size: 13px; color: var(--text); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 6px 8px; width: 100%; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button { font: inherit; font-weight: 600; color: var(--text); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; }
+  button:hover:not(:disabled) { background: var(--tab-hover); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .status { font-size: 13px; color: var(--subtext); min-height: 1.4em; }
+  .result { font-family: var(--mono); font-size: 11.5px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px; white-space: pre; overflow-x: auto; margin: 0; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 13px; }
+  dt { color: var(--subtext); }
+  dd { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--accent); overflow-wrap: anywhere; }
+  .plotcard { background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px; }
+  #benchPlot { width: 100%; height: 420px; display: block; }
+  #error { background: #fff3f3; border: 1px solid var(--bad); color: var(--bad); border-radius: var(--radius); padding: 12px 16px; white-space: pre-wrap; font-size: 13px; }
+</style>
+<script>
+  // Plain script (runs in any browser): if the benchmark module does not
+  // start, say so on the page instead of leaving it blank.
+  (function () {
+    function show(msg) {
+      var e = document.getElementById('error');
+      if (!e) { setTimeout(function () { show(msg); }, 50); return; }
+      e.hidden = false;
+      e.textContent = (e.textContent ? e.textContent + '\n' : '') + msg;
+    }
+    window.__benchShowError = show;
+    window.addEventListener('error', function (ev) { show('Error: ' + (ev.message || ev.type) + (ev.filename ? ' (' + ev.filename.split('/').pop() + ':' + ev.lineno + ')' : '')); });
+    window.addEventListener('unhandledrejection', function (ev) { show('Error: ' + (ev.reason && ev.reason.message ? ev.reason.message : ev.reason)); });
+    setTimeout(function () {
+      if (!window.__benchStarted) show('The benchmark did not start. This page needs Google Chrome 89 or newer with JavaScript modules. Browser: ' + navigator.userAgent);
+    }, 10000);
+  })();
+</script>
+</head>
+<body>
+<header>
+  <h1>radar<span class="js">.js</span> benchmark</h1>
+  <p class="tagline">Processing speed of radar.js on this computer, for the paper's System Performance section. <a href="./index.html">Back to the demo</a></p>
+</header>
+<main>
+  <div id="error" hidden></div>
+
+  <section class="card" aria-label="This computer">
+    <h2>1. This computer</h2>
+    <p class="hint">Fill these in by hand (kept in this browser for next time). The rest is read from the browser.</p>
+    <div class="grid">
+      <label class="field">Machine label <input id="f_label" placeholder="e.g. MacBook Pro M4"></label>
+      <label class="field">CPU model <input id="f_cpu" placeholder="e.g. Apple M4 / AMD A4-9120C"></label>
+      <label class="field">CPU cores <input id="f_cores" placeholder="e.g. 10"></label>
+      <label class="field">RAM <input id="f_ram" placeholder="e.g. 16 GB"></label>
+      <label class="field">Power <select id="f_power"><option value="">choose</option><option>plugged in</option><option>battery</option></select></label>
+      <label class="field">Connection <select id="f_conn"><option value="">choose</option><option>USB hub</option><option>direct USB</option></select></label>
+    </div>
+    <dl id="sysinfo"></dl>
+  </section>
+
+  <section class="card" aria-label="Settings">
+    <h2>2. Settings</h2>
+    <div class="grid">
+      <label class="field">Timed iterations per test <input id="s_iter" type="number" min="100" max="2000" value="200"></label>
+      <label class="field">Warmup iterations <input id="s_warm" type="number" min="0" max="100" value="10"></label>
+      <label class="field">Stream tests, seconds per mode <input id="s_secs" type="number" min="10" max="300" value="60"></label>
+    </div>
+    <div class="row">
+      <label class="field" style="flex:1">Replay data: the bundled clip (100 frames of a hand gesture, antenna 1), or a capture <input id="npyFile" type="file" accept=".npy"></label>
+    </div>
+    <p id="clipInfo" class="hint">Loading the bundled clip…</p>
+  </section>
+
+  <section class="card" aria-label="Benchmarks without the radar">
+    <h2>3. Without the radar</h2>
+    <p class="hint">Keep this window in front and do not use the computer while a test runs. Plug in the power.</p>
+    <div class="row">
+      <button id="runReplay" class="primary" disabled>Replay benchmark</button>
+      <button id="runScaling" disabled>Scaling test</button>
+      <button id="runThreads" disabled>Main thread vs Web Worker</button>
+      <button id="runAllOffline" disabled>Run all three</button>
+    </div>
+    <div class="status" id="offlineStatus"></div>
+    <pre class="result" id="offlineResult" hidden></pre>
+  </section>
+
+  <section class="card" aria-label="Live benchmark">
+    <h2>4. With the radar (live)</h2>
+    <p class="hint">Board connected through the hub. Four modes, one after another: main thread with plot, main thread without plot, Web Worker with plot, Web Worker without plot. Keep Chrome in front and do not touch the board or the computer until it finishes.</p>
+    <p id="noSerial" class="note" hidden>This browser has no Web Serial, so the live benchmark cannot run here.</p>
+    <div class="row">
+      <button id="connectBtn">Connect</button>
+      <button id="runLive" class="primary" disabled>Run live benchmark</button>
+      <span class="status" id="liveConn">Not connected.</span>
+    </div>
+    <div class="status" id="liveStatus"></div>
+    <pre class="result" id="liveResult" hidden></pre>
+  </section>
+
+  <section class="card" aria-label="Plot">
+    <h2>Plot used by the tests</h2>
+    <div class="plotcard"><canvas id="benchPlot"></canvas></div>
+  </section>
+
+  <section class="card" aria-label="Save">
+    <h2>5. Save the results</h2>
+    <div class="row">
+      <button id="download" class="primary" disabled>Download results (JSON and CSV)</button>
+      <span class="status" id="saveStatus"></span>
+    </div>
+  </section>
+</main>
+<script type="module" src="./bench.ts"></script>
+</body>
+</html>
