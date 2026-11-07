@@ -111,7 +111,10 @@ if (list.some(m => m.live)) {
 }
 
 // animation-frame stalls, from the raw intervals
-const rafRows = [['machine', 'mode', 'display_interval_ms', 'display_hz', 'intervals', 'over_1_5x_display', 'over_1_5x_display_pct', 'over_33_ms', 'over_33_ms_pct']];
+// A run whose page stopped drawing (an interval over 1 s: main-thread work
+// longer than the frame period never yields, as on the Chromebook) has no
+// meaningful stall share; it is marked page_stalled and left out of the table.
+const rafRows = [['machine', 'mode', 'display_interval_ms', 'display_hz', 'intervals', 'over_1_5x_display', 'over_1_5x_display_pct', 'over_33_ms', 'over_33_ms_pct', 'longest_ms', 'page_stalled']];
 const rafTex = [];
 for (const m of list) for (const mode of ['main', 'worker']) {
   const iv = m.threads?.[mode]?.raw?.raf_intervals_ms;
@@ -120,7 +123,9 @@ for (const m of list) for (const mode of ['main', 'worker']) {
   const med = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
   const over15 = iv.filter(x => x > 1.5 * med).length, over33 = iv.filter(x => x > 33).length;
   const pct = k => +(100 * k / n).toFixed(1);
-  rafRows.push([m.label, mode, +med.toFixed(2), Math.round(1000 / med), n, over15, pct(over15), over33, pct(over33)]);
+  const longest = sorted[n - 1], stalled = longest > 1000;
+  rafRows.push([m.label, mode, +med.toFixed(2), Math.round(1000 / med), n, over15, pct(over15), over33, pct(over33), +longest.toFixed(1), stalled]);
+  if (stalled) { rafTex.push(`${tex(m.label)} & ${mode === 'main' ? 'main thread' : 'Web Worker'} & ${Math.round(1000 / med)} & \\multicolumn{2}{c}{page did not render (longest gap ${(longest / 1000).toFixed(1)} s)} \\\\`); continue; }
   rafTex.push(`${tex(m.label)} & ${mode === 'main' ? 'main thread' : 'Web Worker'} & ${Math.round(1000 / med)} & ${pct(over15).toFixed(1)}\\% & ${pct(over33).toFixed(1)}\\% \\\\`);
 }
 if (rafTex.length) {

@@ -78,6 +78,15 @@ Reading the live results:
   just over it, while on a 120 Hz display (8.3 ms) it already means a missed
   frame. Add `--expect-commit bc27418` when aggregating the paper's results.
 
+- A device that cannot process a frame within the frame period: in the
+  main thread vs Web Worker test, the main-thread run processes the replayed
+  frames back to back and never yields, so the page does not render for the
+  whole run (HP Chromebook 14: 114 ms per frame, one draw and a 60.1 s gap
+  in 60 s). That run's stall share is not meaningful; `raf_table.tex` says
+  "page did not render" for it, and the worker run is the one to report for
+  such a device. (Kept as measured, so every result comes from the deployed
+  build.)
+
 Timer resolution: Chrome rounds `performance.now()` to 0.1 ms on pages that
 are not cross-origin isolated (GitHub Pages cannot send the headers for
 isolation), so single calls under a few milliseconds carry that rounding;
